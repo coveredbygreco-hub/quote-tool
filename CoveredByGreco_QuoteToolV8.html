@@ -7,6 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- Supabase JS client (used by the CRM layer). Loads from jsDelivr; ~40KB gzipped. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Google Identity Services — used by the CRM's Google Calendar sync (Tier 2). -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -1439,6 +1441,8 @@
       <button class="settings-gear" id="crmTabDashboard" onclick="showCRMTab('dashboard')" style="background:var(--yellow);color:var(--navy);font-weight:600">Dashboard</button>
       <button class="settings-gear" id="crmTabPipelines" onclick="showCRMTab('pipelines')">Pipelines</button>
       <button class="settings-gear" id="crmTabTasks" onclick="showCRMTab('tasks')">Tasks <span id="crmTaskBadge" style="display:none;background:var(--error);color:#fff;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
+      <button class="settings-gear" id="crmTabRenewals" onclick="showCRMTab('renewals')">Renewals <span id="crmRenewalBadge" style="display:none;background:var(--yellow);color:var(--navy);padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
+      <button class="settings-gear" id="crmTabCommissions" onclick="showCRMTab('commissions')">Commissions</button>
       <div style="position:relative;flex:1;min-width:200px;max-width:340px;margin:0 4px">
         <input id="crmSearchBar" type="text" placeholder="Search contacts, deals, email, phone…" autocomplete="off"
                oninput="crmHandleSearch(this.value)" onfocus="crmHandleSearch(this.value)"
@@ -1448,6 +1452,9 @@
       <button class="settings-gear" onclick="openCRMImport()" title="Bulk-import leads or clients from a CSV">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Import CSV
+      </button>
+      <button class="settings-gear" id="gcalConnectBtn" onclick="gcalToggleConnection()" title="Connect Google Calendar + Gmail">
+        <span id="gcalConnectLabel">Connect Google</span>
       </button>
       <button class="settings-gear" onclick="openCRMChangePassword()">Change Password</button>
       <button class="settings-gear" onclick="openCRMSettings()">Connection</button>
@@ -1541,6 +1548,39 @@
         <input class="input" id="pol_members" type="text" placeholder="e.g. Emanuel, Maria, + 2 kids" /></div>
       <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Notes</label>
         <textarea class="input" id="pol_notes" rows="2" style="resize:vertical;font-family:inherit;padding:8px 12px" placeholder="Copay structure, out-of-pocket max, anything else"></textarea></div>
+
+      <!-- Commission section (collapsible) -->
+      <details id="pol_commission_section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <summary style="cursor:pointer;color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;outline:none;user-select:none">Commission (optional)</summary>
+        <div style="margin-top:12px">
+          <div class="save-grid-2" style="gap:10px">
+            <div class="field" style="margin-bottom:0"><label class="label">Commission Type</label>
+              <select class="input" id="pol_commission_type" onchange="onCommissionTypeChange()">
+                <option value="">— None —</option>
+                <option value="pct_premium">% of monthly premium (recurring)</option>
+                <option value="flat_monthly">Flat $/month (recurring)</option>
+                <option value="first_year_flat">First-year flat $ (one-time)</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0" id="pol_commission_rate_wrap">
+              <label class="label">Rate (%)</label>
+              <input class="input" id="pol_commission_rate" type="number" step="0.01" placeholder="e.g. 7.5" />
+            </div>
+            <div class="field" style="margin-bottom:0;display:none" id="pol_commission_flat_wrap">
+              <label class="label">Amount ($)</label>
+              <input class="input" id="pol_commission_flat_amount" type="number" step="0.01" placeholder="e.g. 25.00 or 350.00" />
+            </div>
+          </div>
+          <div class="save-grid-2" style="gap:10px;margin-top:10px">
+            <div class="field" style="margin-bottom:0"><label class="label">Policy Term (months)</label>
+              <input class="input" id="pol_term_months" type="number" step="1" placeholder="12" /></div>
+            <div class="field" style="margin-bottom:0"><label class="label">Chargeback Window (months)</label>
+              <input class="input" id="pol_chargeback_months" type="number" step="1" placeholder="e.g. 6" /></div>
+          </div>
+          <div id="pol_commission_preview" style="margin-top:10px;padding:10px 12px;background:rgba(253,199,47,0.05);border:1px solid rgba(253,199,47,0.15);border-radius:8px;font-size:12px;color:var(--muted);display:none"></div>
+        </div>
+      </details>
+
       <div id="pol_error" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
     </div>
     <div class="modal-footer">
@@ -1566,9 +1606,12 @@
       <div class="field" style="margin-bottom:12px"><label class="label">Title <span style="color:var(--error)">*</span></label>
         <input class="input" id="task_title" type="text" placeholder="e.g. Call back about Bronze HMO quote" />
       </div>
-      <div class="save-grid-2" style="gap:10px">
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px">
         <div class="field" style="margin-bottom:0"><label class="label">Due Date</label>
           <input class="input" id="task_due_date" type="date" />
+        </div>
+        <div class="field" style="margin-bottom:0"><label class="label">Time <span style="color:var(--muted);font-weight:400;font-size:10.5px">(optional)</span></label>
+          <input class="input" id="task_due_time" type="time" step="900" />
         </div>
         <div class="field" style="margin-bottom:0"><label class="label">Priority</label>
           <select class="input" id="task_priority">
@@ -1578,14 +1621,15 @@
           </select>
         </div>
       </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:2px">Leave time blank for an all-day event; set a time to block a 1-hour slot on your calendar.</div>
       <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Notes (optional)</label>
         <textarea class="input" id="task_description" rows="3" style="resize:vertical;min-height:70px;font-family:inherit;padding:10px 12px" placeholder="Anything else to remember about this task…"></textarea>
       </div>
       <div style="margin-top:12px;padding:10px 12px;background:rgba(253,199,47,0.05);border:1px solid rgba(253,199,47,0.2);border-radius:6px;display:flex;align-items:center;gap:8px">
         <input type="checkbox" id="task_gcal" checked style="accent-color:var(--yellow);cursor:pointer" />
         <label for="task_gcal" style="flex:1;font-size:12.5px;color:var(--text);cursor:pointer">
-          <strong style="color:var(--white)">📅 Also add to Google Calendar</strong>
-          <span style="display:block;font-size:11px;color:var(--muted);margin-top:1px">Opens a new tab with the event pre-filled — click Save in Google to add it.</span>
+          <strong style="color:var(--white)">Sync to Google Calendar</strong>
+          <span id="task_gcal_sub" style="display:block;font-size:11px;color:var(--muted);margin-top:1px">Will create, update, and delete the event automatically. Click <em>Connect Calendar</em> in the CRM header if you haven't yet.</span>
         </label>
       </div>
       <div id="taskModalError" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
@@ -3506,6 +3550,8 @@ function openCRM() {
   document.getElementById('crmUserEmail').textContent = crmUser.email || '';
   document.getElementById('crmWorkspaceModal').style.display = 'flex';
   showCRMTab(crmActiveTab || 'dashboard');
+  // Refresh the Google Calendar connect button state now that it's in the DOM.
+  try { updateGCalButton(); } catch (_) {}
 }
 
 function closeCRM() {
@@ -3823,8 +3869,14 @@ function renderPoliciesForContact(contactId) {
 
 function showCRMTab(tab) {
   crmActiveTab = tab;
-  const tabs = ['dashboard','pipelines','tasks'];
-  const btnIds = { dashboard:'crmTabDashboard', pipelines:'crmTabPipelines', tasks:'crmTabTasks' };
+  const tabs = ['dashboard','pipelines','tasks','renewals','commissions'];
+  const btnIds = {
+    dashboard:'crmTabDashboard',
+    pipelines:'crmTabPipelines',
+    tasks:'crmTabTasks',
+    renewals:'crmTabRenewals',
+    commissions:'crmTabCommissions'
+  };
   tabs.forEach(t => {
     const el = document.getElementById(btnIds[t]);
     if (!el) return;
@@ -3837,8 +3889,11 @@ function showCRMTab(tab) {
   loadCRMData().then(() => {
     if (tab === 'dashboard') renderCRMDashboard();
     else if (tab === 'tasks') renderCRMTasks();
+    else if (tab === 'renewals') renderCRMRenewals();
+    else if (tab === 'commissions') renderCRMCommissions();
     else renderCRMPipelines();
     updateCRMTaskBadge();
+    updateCRMRenewalBadge();
   }).catch(e => {
     body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--error)">Error loading CRM data: ' + (e.message || e) + '</div>';
   });
@@ -4534,6 +4589,7 @@ function openDealDetail(dealId) {
       ${section('Tasks & Follow-ups', renderTasksForDeal(deal))}
       ${section('Activity Timeline', renderActivitiesForDeal(deal))}
       ${section('Policies', renderPoliciesForContact(deal.contact_id))}
+      ${section('Email Threads', renderEmailThreadsForContact(contact, deal.id))}
       ${qdBits.length ? section('Quote Snapshot', `
         <div class="modal-note" style="margin-top:0">${qdBits.map(b => escapeHTML(b)).join(' &nbsp;·&nbsp; ')}</div>
       `) : ''}
@@ -4824,7 +4880,15 @@ function formatTaskDueLabel(task) {
   if (bucket === 'someday') return 'No due date';
   if (!task.due_date) return '';
   const d = new Date(task.due_date);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  if (task.due_time && /^\d{2}:\d{2}$/.test(task.due_time)) {
+    const [hh, mm] = task.due_time.split(':').map(Number);
+    const hour12 = ((hh + 11) % 12) + 1;
+    const ampm = hh < 12 ? 'AM' : 'PM';
+    const timeLabel = mm === 0 ? `${hour12} ${ampm}` : `${hour12}:${String(mm).padStart(2,'0')} ${ampm}`;
+    return `${dateLabel} · ${timeLabel}`;
+  }
+  return dateLabel;
 }
 
 function renderCRMTasks() {
@@ -4840,7 +4904,15 @@ function renderCRMTasks() {
     if (!a.due_date && !b.due_date) return 0;
     if (!a.due_date) return 1;
     if (!b.due_date) return -1;
-    return a.due_date.localeCompare(b.due_date);
+    const dateCmp = a.due_date.localeCompare(b.due_date);
+    if (dateCmp !== 0) return dateCmp;
+    // Same date — timed tasks sort before untimed, and earlier time wins.
+    const aT = a.due_time || '';
+    const bT = b.due_time || '';
+    if (!aT && !bT) return 0;
+    if (!aT) return 1;
+    if (!bT) return -1;
+    return aT.localeCompare(bT);
   };
   Object.keys(buckets).forEach(k => buckets[k].sort(byDue));
 
@@ -4912,6 +4984,12 @@ async function toggleTaskComplete(taskId, isComplete) {
     const { error } = await crmClient.from('tasks').update({ completed: isComplete, completed_at: task.completed_at }).eq('id', taskId);
     if (error) throw error;
     updateCRMTaskBadge();
+
+    // Best-effort: patch the linked calendar event so completion shows there too.
+    if (task.google_calendar_event_id && gcalConnected) {
+      const ctx = gcalResolveContext(task);
+      gcalUpdateEvent(task.google_calendar_event_id, task, ctx.deal, ctx.contact);
+    }
   } catch (e) {
     task.completed = prev.completed; task.completed_at = prev.completed_at;
     if (crmActiveTab === 'tasks') renderCRMTasks();
@@ -4929,6 +5007,7 @@ function openTaskModal(taskId, prefill) {
   document.getElementById('taskModalSub').textContent = contextLabel;
   document.getElementById('task_title').value       = task ? (task.title || '') : (prefill.title || '');
   document.getElementById('task_due_date').value    = task ? (task.due_date || '') : (prefill.due_date || '');
+  document.getElementById('task_due_time').value    = task ? (task.due_time || '') : (prefill.due_time || '');
   document.getElementById('task_priority').value    = task ? (task.priority || 'normal') : (prefill.priority || 'normal');
   document.getElementById('task_description').value = task ? (task.description || '') : (prefill.description || '');
   document.getElementById('taskDeleteBtn').style.display = task ? 'inline-block' : 'none';
@@ -4942,15 +5021,27 @@ function closeTaskModal() {
 }
 
 // Build a Google Calendar "quick add" URL that opens a pre-filled event.
-// Treats the task as an all-day event on its due_date; if no due date, defaults to today.
+// If due_time is set, uses a timed 1-hour block (YYYYMMDDTHHmmSS); otherwise all-day.
 function buildGCalURL(task, deal, contact) {
   const title = task.title || 'CRM Task';
-  // Date handling: Google expects YYYYMMDD/YYYYMMDD (end is exclusive → next day)
   const dateStr = task.due_date || new Date().toISOString().slice(0,10);
-  const start = dateStr.replace(/-/g, '');
-  const endDate = new Date(dateStr + 'T00:00:00');
-  endDate.setDate(endDate.getDate() + 1);
-  const end = endDate.toISOString().slice(0,10).replace(/-/g, '');
+  let start, end;
+  if (task.due_time && /^\d{2}:\d{2}$/.test(task.due_time)) {
+    // Timed event: Google render URL expects YYYYMMDDTHHmmSS (local time, no zone).
+    const pad = n => String(n).padStart(2, '0');
+    const startLocal = new Date(dateStr + 'T' + task.due_time + ':00');
+    const endLocal   = new Date(startLocal.getTime() + 60 * 60 * 1000);
+    const fmt = d =>
+      `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+    start = fmt(startLocal);
+    end   = fmt(endLocal);
+  } else {
+    // All-day: YYYYMMDD/YYYYMMDD (end exclusive → next day)
+    start = dateStr.replace(/-/g, '');
+    const endDate = new Date(dateStr + 'T00:00:00');
+    endDate.setDate(endDate.getDate() + 1);
+    end = endDate.toISOString().slice(0,10).replace(/-/g, '');
+  }
   // Details — include context about the deal/contact and notes
   const lines = [];
   if (task.description) lines.push(task.description);
@@ -4989,40 +5080,78 @@ async function saveTaskFromModal() {
   const title = document.getElementById('task_title').value.trim();
   if (!title) { err.textContent = 'Title is required.'; err.style.display = 'block'; return; }
   const due = document.getElementById('task_due_date').value || null;
+  const dueTimeRaw = (document.getElementById('task_due_time') || { value: '' }).value || '';
+  // Only persist a time if a date is also set — otherwise it has no meaning.
+  const dueTime = (due && dueTimeRaw) ? dueTimeRaw : null;
   const priority = document.getElementById('task_priority').value || 'normal';
   const description = document.getElementById('task_description').value.trim() || null;
-  const addToGCal = (document.getElementById('task_gcal') || { checked: false }).checked;
+  const syncToGCal = (document.getElementById('task_gcal') || { checked: false }).checked;
   const saveBtn = document.getElementById('taskSaveBtn');
   saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
   try {
+    let savedTaskId = crmEditingTaskId;
+    let existingEventId = null;
+    let taskRow = null;
+
     if (crmEditingTaskId) {
-      const { error } = await crmClient.from('tasks').update({ title, due_date: due, priority, description }).eq('id', crmEditingTaskId);
+      // UPDATE path
+      const prevTask = crmTasks.find(t => t.id === crmEditingTaskId);
+      existingEventId = prevTask ? (prevTask.google_calendar_event_id || null) : null;
+      const { data, error } = await crmClient.from('tasks')
+        .update({ title, due_date: due, due_time: dueTime, priority, description })
+        .eq('id', crmEditingTaskId)
+        .select()
+        .maybeSingle();
       if (error) throw error;
+      taskRow = data;
     } else {
+      // INSERT path
       const row = {
         owner_id: crmUser.id,
-        title, due_date: due, priority, description,
+        title, due_date: due, due_time: dueTime, priority, description,
         deal_id: crmTaskPrefill.deal_id || null,
         contact_id: crmTaskPrefill.contact_id || null
       };
-      const { error } = await crmClient.from('tasks').insert(row);
+      const { data, error } = await crmClient.from('tasks').insert(row).select().maybeSingle();
       if (error) throw error;
+      taskRow = data;
+      savedTaskId = data ? data.id : null;
     }
-    // Fire Google Calendar tab if requested. Must happen synchronously-ish or browsers block popup.
-    if (addToGCal) {
-      const deal = crmTaskPrefill.deal_id ? crmDeals.find(d => d.id === crmTaskPrefill.deal_id) : null;
-      const contact = crmTaskPrefill.contact_id ? crmContacts.find(c => c.id === crmTaskPrefill.contact_id) : (deal ? crmContacts.find(c => c.id === deal.contact_id) : null);
-      const url = buildGCalURL({ title, due_date: due, priority, description }, deal, contact);
-      window.open(url, '_blank', 'noopener');
+
+    // ----- Google Calendar sync -----
+    let gcalMsg = '';
+    if (syncToGCal && gcalConnected && taskRow) {
+      const ctx = gcalResolveContext(taskRow);
+      if (existingEventId) {
+        // edit path with prior event — patch it
+        const ok = await gcalUpdateEvent(existingEventId, taskRow, ctx.deal, ctx.contact);
+        if (ok) gcalMsg = ' Calendar updated.';
+      } else {
+        // create new event
+        const newEventId = await gcalCreateEvent(taskRow, ctx.deal, ctx.contact);
+        if (newEventId && savedTaskId) {
+          // persist the event id back to the task row (best-effort)
+          try {
+            await crmClient.from('tasks')
+              .update({ google_calendar_event_id: newEventId })
+              .eq('id', savedTaskId);
+          } catch (_) {}
+          gcalMsg = ' Added to Google Calendar.';
+        } else if (!gcalConnected) {
+          // shouldn't happen given guard above, but defensive
+        }
+      }
+    } else if (syncToGCal && !gcalConnected) {
+      gcalMsg = ' (Connect Calendar in the header to auto-sync.)';
     }
+
     await loadCRMData();
     closeTaskModal();
     if (crmActiveTab === 'tasks') renderCRMTasks();
     else if (crmActiveTab === 'dashboard') renderCRMDashboard();
-    // refresh deal-detail if open
     if (crmEditingDealId) openDealDetail(crmEditingDealId);
     updateCRMTaskBadge();
-    showToast(addToGCal ? 'Task saved — Google Calendar opened in new tab.' : 'Task saved.', 'success');
+    showToast('Task saved.' + gcalMsg, 'success');
   } catch (e) {
     err.textContent = (e.message || 'Could not save task.');
     err.style.display = 'block';
@@ -5036,13 +5165,22 @@ async function deleteTaskFromModal() {
   const ok = await showConfirm({
     title: 'Delete this task?',
     sub: 'Permanent — cannot be undone',
-    body: 'This task will be removed from your list.',
+    body: 'This task will be removed from your list. If it was synced to Google Calendar, the calendar event will also be deleted.',
     okText: 'Yes, delete'
   });
   if (!ok) return;
   try {
+    const task = crmTasks.find(t => t.id === crmEditingTaskId);
+    const eventId = task ? task.google_calendar_event_id : null;
+
     const { error } = await crmClient.from('tasks').delete().eq('id', crmEditingTaskId);
     if (error) throw error;
+
+    // Best-effort: remove the matching Google Calendar event. Don't block on it.
+    if (eventId && gcalConnected) {
+      gcalDeleteEvent(eventId);
+    }
+
     await loadCRMData();
     closeTaskModal();
     if (crmActiveTab === 'tasks') renderCRMTasks();
@@ -5173,10 +5311,56 @@ function openPolicyModal(contactId, policyId) {
   document.getElementById('pol_status').value    = policy ? (policy.status || 'active') : 'active';
   document.getElementById('pol_members').value   = policy ? (policy.members_covered || '') : '';
   document.getElementById('pol_notes').value     = policy ? (policy.notes || '') : '';
+  // Commission fields
+  document.getElementById('pol_commission_type').value         = policy && policy.commission_type ? policy.commission_type : '';
+  document.getElementById('pol_commission_rate').value         = policy && policy.commission_rate != null ? policy.commission_rate : '';
+  document.getElementById('pol_commission_flat_amount').value  = policy && policy.commission_flat_amount != null ? policy.commission_flat_amount : '';
+  document.getElementById('pol_term_months').value             = policy && policy.policy_term_months != null ? policy.policy_term_months : '';
+  document.getElementById('pol_chargeback_months').value       = policy && policy.chargeback_months != null ? policy.chargeback_months : '';
+  // Open the commission section if the policy already has commission set
+  document.getElementById('pol_commission_section').open = !!(policy && policy.commission_type);
+  onCommissionTypeChange();
   document.getElementById('policyDeleteBtn').style.display = policy ? 'inline-block' : 'none';
   document.getElementById('pol_error').style.display = 'none';
   document.getElementById('policyModal').style.display = 'flex';
   setTimeout(() => document.getElementById('pol_carrier').focus(), 30);
+}
+
+// Toggle rate vs flat-amount fields based on selected commission type + show preview
+function onCommissionTypeChange() {
+  const type = document.getElementById('pol_commission_type').value;
+  const rateWrap = document.getElementById('pol_commission_rate_wrap');
+  const flatWrap = document.getElementById('pol_commission_flat_wrap');
+  if (!type) {
+    rateWrap.style.display = 'block'; flatWrap.style.display = 'none';
+    document.getElementById('pol_commission_preview').style.display = 'none';
+    return;
+  }
+  if (type === 'pct_premium') {
+    rateWrap.style.display = 'block'; flatWrap.style.display = 'none';
+  } else {
+    rateWrap.style.display = 'none'; flatWrap.style.display = 'block';
+  }
+  updateCommissionPreview();
+}
+
+function updateCommissionPreview() {
+  const preview = document.getElementById('pol_commission_preview');
+  const type = document.getElementById('pol_commission_type').value;
+  const premium = parseFloat(document.getElementById('pol_premium').value) || 0;
+  const rate = parseFloat(document.getElementById('pol_commission_rate').value) || 0;
+  const flat = parseFloat(document.getElementById('pol_commission_flat_amount').value) || 0;
+  const term = parseInt(document.getElementById('pol_term_months').value) || 12;
+  const est = estimateCommission({
+    commission_type: type,
+    commission_rate: rate,
+    commission_flat_amount: flat,
+    monthly_premium: premium,
+    policy_term_months: term
+  });
+  if (!type || est.total === 0) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+  preview.innerHTML = `<span style="color:var(--yellow);font-weight:600">Estimated commission:</span> ${est.description}`;
 }
 
 function closePolicyModal() {
@@ -5202,7 +5386,12 @@ async function savePolicyFromModal() {
     monthly_premium: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_premium').value.trim()),
     status: document.getElementById('pol_status').value,
     members_covered: document.getElementById('pol_members').value.trim() || null,
-    notes: document.getElementById('pol_notes').value.trim() || null
+    notes: document.getElementById('pol_notes').value.trim() || null,
+    commission_type: document.getElementById('pol_commission_type').value || null,
+    commission_rate: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_commission_rate').value.trim()),
+    commission_flat_amount: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_commission_flat_amount').value.trim()),
+    policy_term_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_term_months').value.trim()),
+    chargeback_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_chargeback_months').value.trim())
   };
   const saveBtn = document.getElementById('policySaveBtn');
   saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
@@ -5254,6 +5443,432 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// ---------- COMMISSION HELPERS ----------
+// Returns { monthly, total, description } for a policy based on its commission settings.
+function estimateCommission(p) {
+  const term = p.policy_term_months || 12;
+  const premium = Number(p.monthly_premium) || 0;
+  const rate = Number(p.commission_rate) || 0;
+  const flat = Number(p.commission_flat_amount) || 0;
+  if (!p.commission_type) return { monthly: 0, total: 0, description: '' };
+
+  if (p.commission_type === 'pct_premium') {
+    const monthly = premium * (rate / 100);
+    const total = monthly * term;
+    return {
+      monthly,
+      total,
+      description: `$${monthly.toFixed(2)}/mo × ${term} mo = $${total.toFixed(2)} total (${rate}% of $${premium.toFixed(2)} premium)`
+    };
+  }
+  if (p.commission_type === 'flat_monthly') {
+    const monthly = flat;
+    const total = monthly * term;
+    return {
+      monthly,
+      total,
+      description: `$${monthly.toFixed(2)}/mo × ${term} mo = $${total.toFixed(2)} total`
+    };
+  }
+  if (p.commission_type === 'first_year_flat') {
+    const monthly = flat / term;
+    const total = flat;
+    return {
+      monthly,
+      total,
+      description: `$${flat.toFixed(2)} one-time (≈ $${monthly.toFixed(2)}/mo over ${term} months)`
+    };
+  }
+  return { monthly: 0, total: 0, description: '' };
+}
+
+function commissionLabel(type) {
+  if (type === 'pct_premium') return '% of premium';
+  if (type === 'flat_monthly') return 'Flat $/mo';
+  if (type === 'first_year_flat') return 'First-year flat';
+  return '—';
+}
+
+// ---------- COMMISSIONS TAB ----------
+function renderCRMCommissions() {
+  const body = document.getElementById('crmWorkspaceBody');
+  const policiesWithCommission = crmPolicies.filter(p => p.commission_type);
+
+  // Totals across ACTIVE policies only
+  const activeCommission = policiesWithCommission.filter(p => p.status === 'active');
+  let mrr = 0;
+  let monthlyComm = 0;
+  let annualComm = 0;
+  let totalBook = 0;
+  activeCommission.forEach(p => {
+    const est = estimateCommission(p);
+    mrr += Number(p.monthly_premium) || 0;
+    monthlyComm += est.monthly;
+    annualComm += est.monthly * 12;
+    totalBook += est.total;
+  });
+
+  // Count of all policies and those without commission data
+  const allActive = crmPolicies.filter(p => p.status === 'active').length;
+  const untrackedCount = allActive - activeCommission.length;
+
+  const fmt = n => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // Group by carrier for breakdown
+  const byCarrier = {};
+  activeCommission.forEach(p => {
+    const k = p.carrier || 'Unknown';
+    if (!byCarrier[k]) byCarrier[k] = { count: 0, mrr: 0, monthlyComm: 0 };
+    const est = estimateCommission(p);
+    byCarrier[k].count++;
+    byCarrier[k].mrr += Number(p.monthly_premium) || 0;
+    byCarrier[k].monthlyComm += est.monthly;
+  });
+  const carrierRows = Object.entries(byCarrier)
+    .sort((a, b) => b[1].monthlyComm - a[1].monthlyComm)
+    .map(([carrier, d]) => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 10px">${escapeHTML(carrier)}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--muted)">${d.count}</td>
+        <td style="padding:8px 10px;text-align:right">${fmt(d.mrr)}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt(d.monthlyComm)}</td>
+      </tr>`).join('');
+
+  // Full policy list
+  const sortedPolicies = [...policiesWithCommission].sort((a, b) => {
+    const ea = estimateCommission(a).monthly;
+    const eb = estimateCommission(b).monthly;
+    return eb - ea;
+  });
+  const policyRows = sortedPolicies.map(p => {
+    const contact = crmContacts.find(c => c.id === p.contact_id);
+    const name = contact ? ([contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || '—') : '—';
+    const est = estimateCommission(p);
+    const statusColor = p.status === 'active' ? 'var(--success)' : (p.status === 'pending' ? 'var(--yellow)' : 'var(--muted)');
+    return `
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openPolicyModal('${p.contact_id}','${p.id}')">
+        <td style="padding:8px 10px">${escapeHTML(name)}</td>
+        <td style="padding:8px 10px">${escapeHTML(p.carrier || '')} ${p.plan_name ? '<span style="color:var(--muted);font-size:11px">· ' + escapeHTML(p.plan_name) + '</span>' : ''}</td>
+        <td style="padding:8px 10px;text-align:right">${p.monthly_premium != null ? fmt(Number(p.monthly_premium)) : '—'}</td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--muted)">${commissionLabel(p.commission_type)}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt(est.monthly)}</td>
+        <td style="padding:8px 10px;text-align:right">${fmt(est.total)}</td>
+        <td style="padding:8px 10px"><span style="color:${statusColor};font-size:11px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600">${escapeHTML(p.status || '')}</span></td>
+      </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="padding:20px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px">
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Active MRR</div>
+          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(mrr)}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Across ${activeCommission.length} active ${activeCommission.length === 1 ? 'policy' : 'policies'}</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Monthly Commission</div>
+          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(monthlyComm)}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Recurring income estimate</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Annualized</div>
+          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(annualComm)}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Monthly × 12</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Book Value</div>
+          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totalBook)}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Total over policy terms</div>
+        </div>
+      </div>
+
+      ${untrackedCount > 0 ? `
+        <div style="background:rgba(253,199,47,0.06);border:1px solid rgba(253,199,47,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--muted)">
+          <span style="color:var(--yellow);font-weight:600">${untrackedCount}</span> active ${untrackedCount === 1 ? 'policy has' : 'policies have'} no commission data — open ${untrackedCount === 1 ? 'it' : 'them'} and fill in the Commission section to include in these totals.
+        </div>
+      ` : ''}
+
+      ${carrierRows ? `
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-title" style="margin-bottom:10px">By Carrier (active only)</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Policies</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">MRR</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Monthly $</th>
+              </tr>
+            </thead>
+            <tbody>${carrierRows}</tbody>
+          </table>
+        </div>
+      ` : ''}
+
+      ${policyRows ? `
+        <div class="card">
+          <div class="card-title" style="margin-bottom:10px">All Commissioned Policies</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Client</th>
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier / Plan</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Premium</th>
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Type</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Monthly</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Total</th>
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Status</th>
+              </tr>
+            </thead>
+            <tbody>${policyRows}</tbody>
+          </table>
+        </div>
+      ` : `
+        <div style="padding:40px;text-align:center;color:var(--muted)">
+          <div style="font-size:14px;color:var(--white);margin-bottom:8px">No commissions tracked yet</div>
+          <div style="font-size:12px">Open any policy on a deal, expand the <b>Commission</b> section, and enter rate or flat amount.</div>
+        </div>
+      `}
+    </div>`;
+}
+
+// ---------- RENEWALS / OEP TAB ----------
+function renderCRMRenewals() {
+  const body = document.getElementById('crmWorkspaceBody');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const oneDay = 24 * 60 * 60 * 1000;
+
+  // Only policies that aren't cancelled/expired and have a renewal date
+  const eligible = crmPolicies.filter(p =>
+    p.renewal_date && p.status !== 'cancelled' && p.status !== 'expired'
+  );
+
+  // OEP window: Nov 1 – Jan 15 of the upcoming cycle
+  const year = today.getFullYear();
+  const nov1ThisYear = new Date(year, 10, 1); // month is 0-indexed
+  const nov1 = today > nov1ThisYear ? new Date(year + 1, 10, 1) : nov1ThisYear;
+  const jan15 = new Date(nov1.getFullYear() + 1, 0, 15);
+
+  const bucketFor = (renewalDate) => {
+    const d = new Date(renewalDate + 'T00:00:00');
+    if (isNaN(d.getTime())) return 'unknown';
+    const days = Math.floor((d - today) / oneDay);
+    if (days < 0) return 'overdue';
+    if (days <= 30) return '30';
+    if (days <= 60) return '60';
+    if (days <= 90) return '90';
+    if (d >= nov1 && d <= jan15) return 'oep';
+    return 'later';
+  };
+
+  const buckets = { overdue: [], '30': [], '60': [], '90': [], oep: [], later: [] };
+  eligible.forEach(p => {
+    const b = bucketFor(p.renewal_date);
+    if (buckets[b]) buckets[b].push(p);
+  });
+
+  // Sort each bucket ascending by renewal date
+  Object.values(buckets).forEach(arr => arr.sort((a,b) => (a.renewal_date || '').localeCompare(b.renewal_date || '')));
+
+  const renderBucket = (title, color, policies, meta = '') => {
+    if (!policies.length) return '';
+    const rows = policies.map(p => {
+      const contact = crmContacts.find(c => c.id === p.contact_id);
+      const name = contact ? ([contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || '—') : '—';
+      const daysOut = Math.floor((new Date(p.renewal_date + 'T00:00:00') - today) / oneDay);
+      const daysLabel = daysOut < 0 ? `${Math.abs(daysOut)} days overdue` : `in ${daysOut} day${daysOut === 1 ? '' : 's'}`;
+      const hasTask = crmTasks.some(t => !t.completed && t.policy_id === p.id);
+      const taskBtn = hasTask
+        ? `<span style="color:var(--success);font-size:11px">✓ Task set</span>`
+        : `<button class="btn-ghost" style="padding:4px 10px;font-size:11px;width:auto;margin:0" onclick="event.stopPropagation();createRenewalTask('${p.id}')">+ Task</button>`;
+      return `
+        <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openPolicyModal('${p.contact_id}','${p.id}')">
+          <td style="padding:8px 10px">${escapeHTML(name)}</td>
+          <td style="padding:8px 10px">${escapeHTML(p.carrier || '')} ${p.plan_name ? '<span style="color:var(--muted);font-size:11px">· ' + escapeHTML(p.plan_name) + '</span>' : ''}</td>
+          <td style="padding:8px 10px">${escapeHTML(p.renewal_date)}</td>
+          <td style="padding:8px 10px;font-size:11px;color:var(--muted)">${daysLabel}</td>
+          <td style="padding:8px 10px;text-align:right">${taskBtn}</td>
+        </tr>`;
+    }).join('');
+    return `
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:10px;display:flex;align-items:center;gap:10px">
+          <span style="color:${color}">${title}</span>
+          <span style="font-size:11px;color:var(--muted);font-weight:400;background:rgba(253,199,47,0.08);border:1px solid rgba(253,199,47,0.2);padding:2px 8px;border-radius:10px">${policies.length}</span>
+          ${meta ? `<span style="font-size:11px;color:var(--muted);font-weight:400">${meta}</span>` : ''}
+          <div style="flex:1"></div>
+          <button class="btn-ghost" style="padding:5px 12px;font-size:11px;width:auto;margin:0" onclick="createBulkRenewalTasks('${Object.keys(buckets).find(k => buckets[k] === policies)}')">Create tasks for all</button>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Client</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier / Plan</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Renewal Date</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">When</th>
+              <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Task</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  };
+
+  const totalUpcoming = buckets['30'].length + buckets['60'].length + buckets['90'].length + buckets.later.length;
+
+  const oepMeta = `(${nov1.toLocaleDateString(undefined, { month:'short', day:'numeric' })} – ${jan15.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })})`;
+
+  body.innerHTML = `
+    <div style="padding:20px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px">
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Overdue</div>
+          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets.overdue.length ? 'var(--error)' : 'var(--muted)'}">${buckets.overdue.length}</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Next 30 days</div>
+          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets['30'].length ? 'var(--yellow)' : 'var(--muted)'}">${buckets['30'].length}</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">31–60 days</div>
+          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets['60'].length ? 'var(--yellow)' : 'var(--muted)'}">${buckets['60'].length}</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">61–90 days</div>
+          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets['90'].length ? 'var(--white)' : 'var(--muted)'}">${buckets['90'].length}</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">OEP Window</div>
+          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets.oep.length ? 'var(--yellow)' : 'var(--muted)'}">${buckets.oep.length}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${oepMeta}</div>
+        </div>
+      </div>
+
+      ${renderBucket('Overdue renewals', 'var(--error)', buckets.overdue)}
+      ${renderBucket('Due in 30 days', 'var(--yellow)', buckets['30'])}
+      ${renderBucket('Due in 31–60 days', 'var(--yellow)', buckets['60'])}
+      ${renderBucket('Due in 61–90 days', 'var(--white)', buckets['90'])}
+      ${renderBucket('OEP window', 'var(--yellow)', buckets.oep, oepMeta)}
+      ${renderBucket('Later than 90 days', 'var(--muted)', buckets.later)}
+
+      ${totalUpcoming + buckets.overdue.length + buckets.oep.length === 0 ? `
+        <div style="padding:40px;text-align:center;color:var(--muted)">
+          <div style="font-size:14px;color:var(--white);margin-bottom:8px">No upcoming renewals</div>
+          <div style="font-size:12px">Add renewal dates to your policies to see them here.</div>
+        </div>
+      ` : ''}
+    </div>`;
+}
+
+function updateCRMRenewalBadge() {
+  const badge = document.getElementById('crmRenewalBadge');
+  if (!badge) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const thirty = new Date(today); thirty.setDate(today.getDate() + 30);
+  const count = crmPolicies.filter(p => {
+    if (!p.renewal_date) return false;
+    if (p.status === 'cancelled' || p.status === 'expired') return false;
+    const d = new Date(p.renewal_date + 'T00:00:00');
+    return d >= today && d <= thirty;
+  }).length;
+  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+  else badge.style.display = 'none';
+}
+
+// Create a single renewal follow-up task (due 30 days before renewal)
+async function createRenewalTask(policyId) {
+  const policy = crmPolicies.find(p => p.id === policyId);
+  if (!policy) { showToast('Policy not found', 'error'); return; }
+  const contact = crmContacts.find(c => c.id === policy.contact_id);
+  const contactName = contact ? ([contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'client') : 'client';
+  // Task due date: 30 days before renewal, or today if less
+  const renewal = new Date(policy.renewal_date + 'T00:00:00');
+  const taskDate = new Date(renewal); taskDate.setDate(taskDate.getDate() - 30);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dueStr = (taskDate < today ? today : taskDate).toISOString().slice(0,10);
+  try {
+    const row = {
+      owner_id: crmUser.id,
+      title: `Renewal check-in: ${contactName} (${policy.carrier || 'policy'})`,
+      notes: `${policy.carrier || ''}${policy.plan_name ? ' ' + policy.plan_name : ''}. Renewal date: ${policy.renewal_date}.\nCheck plan options, confirm subsidy, quote alternatives if needed.`,
+      due_date: dueStr,
+      priority: 'high',
+      completed: false,
+      contact_id: policy.contact_id,
+      policy_id: policy.id
+    };
+    const { error } = await crmClient.from('tasks').insert(row);
+    if (error) throw error;
+    await loadCRMData();
+    renderCRMRenewals();
+    showToast('Renewal task created for ' + contactName, 'success');
+  } catch (e) {
+    showToast('Could not create task: ' + (e.message || e), 'error');
+  }
+}
+
+// Bulk: create tasks for every policy in a renewal bucket
+async function createBulkRenewalTasks(bucketKey) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const oneDay = 24 * 60 * 60 * 1000;
+  const eligible = crmPolicies.filter(p =>
+    p.renewal_date && p.status !== 'cancelled' && p.status !== 'expired'
+  );
+  const year = today.getFullYear();
+  const nov1ThisYear = new Date(year, 10, 1);
+  const nov1 = today > nov1ThisYear ? new Date(year + 1, 10, 1) : nov1ThisYear;
+  const jan15 = new Date(nov1.getFullYear() + 1, 0, 15);
+
+  const inBucket = eligible.filter(p => {
+    const d = new Date(p.renewal_date + 'T00:00:00');
+    if (isNaN(d.getTime())) return false;
+    const days = Math.floor((d - today) / oneDay);
+    if (bucketKey === 'overdue') return days < 0;
+    if (bucketKey === '30') return days >= 0 && days <= 30;
+    if (bucketKey === '60') return days > 30 && days <= 60;
+    if (bucketKey === '90') return days > 60 && days <= 90;
+    if (bucketKey === 'oep') return d >= nov1 && d <= jan15;
+    if (bucketKey === 'later') return days > 90 && !(d >= nov1 && d <= jan15);
+    return false;
+  });
+
+  // Skip policies that already have an open task
+  const needsTask = inBucket.filter(p => !crmTasks.some(t => !t.completed && t.policy_id === p.id));
+  if (!needsTask.length) { showToast('All policies in this bucket already have an open task.', 'info'); return; }
+
+  const ok = await showConfirm({
+    title: `Create ${needsTask.length} renewal task${needsTask.length === 1 ? '' : 's'}?`,
+    body: 'Tasks will be due 30 days before each renewal (or today if that\'s already past).',
+    okText: 'Yes, create'
+  });
+  if (!ok) return;
+
+  let created = 0, failed = 0;
+  for (const p of needsTask) {
+    const contact = crmContacts.find(c => c.id === p.contact_id);
+    const contactName = contact ? ([contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'client') : 'client';
+    const renewal = new Date(p.renewal_date + 'T00:00:00');
+    const taskDate = new Date(renewal); taskDate.setDate(taskDate.getDate() - 30);
+    const dueStr = (taskDate < today ? today : taskDate).toISOString().slice(0,10);
+    try {
+      const { error } = await crmClient.from('tasks').insert({
+        owner_id: crmUser.id,
+        title: `Renewal check-in: ${contactName} (${p.carrier || 'policy'})`,
+        notes: `${p.carrier || ''}${p.plan_name ? ' ' + p.plan_name : ''}. Renewal date: ${p.renewal_date}.`,
+        due_date: dueStr,
+        priority: 'high',
+        completed: false,
+        contact_id: p.contact_id,
+        policy_id: p.id
+      });
+      if (error) { failed++; } else { created++; }
+    } catch (_) { failed++; }
+  }
+  await loadCRMData();
+  renderCRMRenewals();
+  showToast(`Created ${created} task${created === 1 ? '' : 's'}${failed ? ` (${failed} failed)` : ''}.`, failed ? 'error' : 'success');
+}
+
 // ---------- Migration helpers ----------
 function tableMigrationRun(tableName) {
   // We can only tell indirectly — loadCRMData populates these arrays and they stay empty on error.
@@ -5267,6 +5882,408 @@ function tierOneMigrationNotice(featureName) {
     <div style="font-size:12px;max-width:420px;margin:0 auto;line-height:1.5">If this is your first time using this tab, make sure you ran <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px">supabase_tier1_migration.sql</code> in the Supabase SQL Editor.</div>
   </div>`;
 }
+
+// =====================================================================
+// GOOGLE CALENDAR SYNC (Tier 2)
+// Uses Google Identity Services (implicit token flow). Access tokens
+// expire in ~1 hour and are NOT stored anywhere — we only persist a
+// flag in localStorage that the user opted in, so we can try a silent
+// re-auth next time the CRM opens. The token itself lives in memory.
+// =====================================================================
+
+const GOOGLE_CLIENT_ID = '957964954624-93uimivc1epb0hpie1s05bsj56tfgovu.apps.googleusercontent.com';
+// Combined scope: Calendar events (create/update/delete task events) + Gmail read-only (show threads per contact).
+// Gmail readonly gives full message content; it does NOT allow send/modify/delete.
+const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly';
+const GCAL_LS_FLAG = 'cbg_google_connected_v2';  // v2 because scope expanded — forces re-consent on old installs
+
+let gcalTokenClient = null;
+let gcalAccessToken = null;
+let gcalConnected = false;
+let gcalInitTries = 0;
+
+function gcalInit() {
+  if (!window.google || !google.accounts || !google.accounts.oauth2) {
+    gcalInitTries++;
+    if (gcalInitTries < 40) { // ~8s total
+      setTimeout(gcalInit, 200);
+    } else {
+      console.warn('[GCal] Google Identity Services did not load. Calendar sync disabled.');
+    }
+    return;
+  }
+  try {
+    gcalTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GCAL_SCOPE,
+      callback: (response) => {
+        if (response && response.access_token) {
+          gcalAccessToken = response.access_token;
+          gcalConnected = true;
+          try { localStorage.setItem(GCAL_LS_FLAG, '1'); } catch (_) {}
+          updateGCalButton();
+          if (window.__gcalPendingResolve) {
+            const r = window.__gcalPendingResolve;
+            window.__gcalPendingResolve = null;
+            r(true);
+          }
+        } else if (window.__gcalPendingResolve) {
+          const r = window.__gcalPendingResolve;
+          window.__gcalPendingResolve = null;
+          r(false);
+        }
+      },
+      error_callback: (err) => {
+        console.warn('[GCal] token error:', err);
+        if (window.__gcalPendingResolve) {
+          const r = window.__gcalPendingResolve;
+          window.__gcalPendingResolve = null;
+          r(false);
+        }
+      }
+    });
+  } catch (e) {
+    console.warn('[GCal] initTokenClient failed:', e);
+    return;
+  }
+  // Silent auto-reconnect if the user connected previously.
+  try {
+    if (localStorage.getItem(GCAL_LS_FLAG) === '1') {
+      gcalTokenClient.requestAccessToken({ prompt: '' });
+    }
+  } catch (_) {}
+  updateGCalButton();
+}
+
+// Called when the user clicks the "Connect Calendar" button in the CRM header.
+function gcalToggleConnection() {
+  if (gcalConnected) {
+    // Disconnect flow — ask first
+    showConfirm({
+      title: 'Disconnect Google?',
+      sub: 'Calendar sync + Gmail thread lookup will stop',
+      body: 'Existing events already on your calendar stay there. You can reconnect anytime.',
+      okText: 'Yes, disconnect'
+    }).then(ok => {
+      if (!ok) return;
+      gcalDisconnect();
+    });
+    return;
+  }
+  if (!gcalTokenClient) {
+    showToast('Google sign-in is still loading. Try again in a second.', 'error');
+    return;
+  }
+  // Request a token — this pops up the Google sign-in window.
+  try {
+    gcalTokenClient.requestAccessToken({ prompt: 'consent' });
+  } catch (e) {
+    showToast('Could not open Google sign-in: ' + (e.message || e), 'error');
+  }
+}
+
+function gcalDisconnect() {
+  if (gcalAccessToken && window.google && google.accounts && google.accounts.oauth2) {
+    try { google.accounts.oauth2.revoke(gcalAccessToken, () => {}); } catch (_) {}
+  }
+  gcalAccessToken = null;
+  gcalConnected = false;
+  try { localStorage.removeItem(GCAL_LS_FLAG); } catch (_) {}
+  updateGCalButton();
+  showToast('Google Calendar disconnected.', 'success');
+}
+
+function updateGCalButton() {
+  const label = document.getElementById('gcalConnectLabel');
+  const btn = document.getElementById('gcalConnectBtn');
+  if (!label || !btn) return;
+  if (gcalConnected) {
+    label.textContent = 'Google: ON';
+    btn.style.background = 'rgba(61,191,138,0.15)';
+    btn.style.borderColor = 'rgba(61,191,138,0.4)';
+    btn.style.color = 'var(--success)';
+    btn.title = 'Google Calendar + Gmail connected. Click to disconnect.';
+  } else {
+    label.textContent = 'Connect Google';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.title = 'Connect Google Calendar + Gmail';
+  }
+}
+
+// Build the Calendar API event body from a task row.
+// If due_time is set, creates a timed 1-hour event in the browser's timezone.
+// Otherwise creates an all-day event. Falls back to today if no due_date.
+function buildGCalEventBody(task, deal, contact) {
+  const dateStr = task.due_date || new Date().toISOString().slice(0,10);
+  const lines = [];
+  if (task.description) lines.push(task.description);
+  if (deal) lines.push('Deal: ' + (deal.name || crmContactLabel(deal)));
+  if (contact) {
+    const name = [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+    if (name) lines.push('Contact: ' + name);
+    if (contact.phone) lines.push('Phone: ' + contact.phone);
+    if (contact.email) lines.push('Email: ' + contact.email);
+  }
+  if (task.priority && task.priority !== 'normal') lines.push('Priority: ' + task.priority.toUpperCase());
+  lines.push('');
+  lines.push('— Added from Covered By Greco CRM');
+  const prefix = task.completed ? '[Done] ' : '';
+
+  const body = {
+    summary: prefix + (task.title || 'CRM Task'),
+    description: lines.join('\n')
+  };
+
+  // Timed event path: date + time ⇒ 1-hour block in the local timezone.
+  if (task.due_time && /^\d{2}:\d{2}$/.test(task.due_time)) {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Los_Angeles';
+    const startLocal = new Date(dateStr + 'T' + task.due_time + ':00');
+    const endLocal = new Date(startLocal.getTime() + 60 * 60 * 1000); // +1 hour
+    // Google accepts full ISO strings with a timeZone field and will interpret them in that zone.
+    // Build a local-time ISO (no Z), then pair with timeZone so GCal doesn't shift it.
+    const pad = n => String(n).padStart(2, '0');
+    const fmtLocal = d =>
+      `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+    body.start = { dateTime: fmtLocal(startLocal), timeZone: tz };
+    body.end   = { dateTime: fmtLocal(endLocal),   timeZone: tz };
+    // Reminder: GCal auto-reminders only fire for timed events; these pop 10 min before.
+    body.reminders = { useDefault: false, overrides: [{ method: 'popup', minutes: 10 }] };
+  } else {
+    // All-day path (end is exclusive).
+    const endDate = new Date(dateStr + 'T00:00:00');
+    endDate.setDate(endDate.getDate() + 1);
+    const endStr = endDate.toISOString().slice(0,10);
+    body.start = { date: dateStr };
+    body.end   = { date: endStr };
+  }
+  return body;
+}
+
+// Low-level fetch wrapper. Auto-retries once on 401 by silently re-requesting a token.
+async function gcalFetch(path, options) {
+  if (!gcalConnected || !gcalAccessToken) return { ok: false, status: 0 };
+  const doFetch = () => fetch('https://www.googleapis.com/calendar/v3' + path, {
+    ...options,
+    headers: {
+      'Authorization': 'Bearer ' + gcalAccessToken,
+      'Content-Type': 'application/json',
+      ...(options && options.headers ? options.headers : {})
+    }
+  });
+  let res = await doFetch();
+  if (res.status === 401) {
+    // Token expired. Try silent refresh and retry once.
+    const ok = await new Promise(resolve => {
+      window.__gcalPendingResolve = resolve;
+      try { gcalTokenClient.requestAccessToken({ prompt: '' }); }
+      catch (_) { resolve(false); }
+    });
+    if (!ok) return { ok: false, status: 401 };
+    res = await doFetch();
+  }
+  return res;
+}
+
+async function gcalCreateEvent(task, deal, contact) {
+  if (!gcalConnected) return null;
+  try {
+    const res = await gcalFetch('/calendars/primary/events', {
+      method: 'POST',
+      body: JSON.stringify(buildGCalEventBody(task, deal, contact))
+    });
+    if (!res.ok) { console.warn('[GCal] create failed', res.status); return null; }
+    const data = await res.json();
+    return data.id || null;
+  } catch (e) { console.warn('[GCal] create threw:', e); return null; }
+}
+
+async function gcalUpdateEvent(eventId, task, deal, contact) {
+  if (!gcalConnected || !eventId) return false;
+  try {
+    const res = await gcalFetch('/calendars/primary/events/' + encodeURIComponent(eventId), {
+      method: 'PATCH',
+      body: JSON.stringify(buildGCalEventBody(task, deal, contact))
+    });
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      console.warn('[GCal] update failed', res.status);
+      return false;
+    }
+    return true;
+  } catch (e) { console.warn('[GCal] update threw:', e); return false; }
+}
+
+async function gcalDeleteEvent(eventId) {
+  if (!gcalConnected || !eventId) return;
+  try {
+    const res = await gcalFetch('/calendars/primary/events/' + encodeURIComponent(eventId), {
+      method: 'DELETE'
+    });
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      console.warn('[GCal] delete failed', res.status);
+    }
+  } catch (e) { console.warn('[GCal] delete threw:', e); }
+}
+
+// Resolve deal + contact for a task row, for event description context.
+function gcalResolveContext(task) {
+  const deal = task.deal_id ? crmDeals.find(d => d.id === task.deal_id) : null;
+  const contact = task.contact_id
+    ? crmContacts.find(c => c.id === task.contact_id)
+    : (deal ? crmContacts.find(c => c.id === deal.contact_id) : null);
+  return { deal, contact };
+}
+
+// =====================================================================
+// GMAIL READ-ONLY SYNC
+// Uses the same OAuth token as Calendar (scopes bundled together).
+// Fetches up to 5 most recent threads with the contact's email address,
+// shows subject + snippet + date, with one-click "Log as activity".
+// =====================================================================
+
+// Low-level Gmail fetch — same 401 retry pattern as gcalFetch.
+async function gmailFetch(path, options) {
+  if (!gcalConnected || !gcalAccessToken) return { ok: false, status: 0 };
+  const doFetch = () => fetch('https://gmail.googleapis.com/gmail/v1/users/me' + path, {
+    ...options,
+    headers: {
+      'Authorization': 'Bearer ' + gcalAccessToken,
+      'Content-Type': 'application/json',
+      ...(options && options.headers ? options.headers : {})
+    }
+  });
+  let res = await doFetch();
+  if (res.status === 401) {
+    const ok = await new Promise(resolve => {
+      window.__gcalPendingResolve = resolve;
+      try { gcalTokenClient.requestAccessToken({ prompt: '' }); }
+      catch (_) { resolve(false); }
+    });
+    if (!ok) return { ok: false, status: 401 };
+    res = await doFetch();
+  }
+  return res;
+}
+
+// Renders the Email Threads panel inside Deal Detail.
+// Starts empty with a "Load recent emails" button — we don't auto-fetch
+// on every modal open because it costs API quota + adds latency.
+function renderEmailThreadsForContact(contact, dealId) {
+  if (!contact || !contact.email) {
+    return '<div style="font-size:12px;color:var(--muted);padding:4px 0">Add an email to this contact to pull Gmail threads.</div>';
+  }
+  if (!gcalConnected) {
+    return `<div style="font-size:12px;color:var(--muted);padding:4px 0">Click <b>Connect Google</b> in the header to enable Gmail thread lookup.</div>`;
+  }
+  const emailEsc = escapeHTML(contact.email);
+  return `
+    <div id="gmail_panel_${dealId}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="flex:1;font-size:12px;color:var(--muted)">Recent Gmail threads with <span style="color:var(--white)">${emailEsc}</span></div>
+        <button class="btn-ghost" style="width:auto;padding:5px 12px;font-size:11px;margin:0" onclick="loadGmailThreads('${contact.email}','${dealId}')">Load recent emails</button>
+      </div>
+      <div id="gmail_list_${dealId}" style="font-size:12px;color:var(--muted)">Click the button to fetch the last few threads.</div>
+    </div>`;
+}
+
+// Fetches up to 5 recent threads with the given email, then renders them.
+async function loadGmailThreads(email, dealId) {
+  const listEl = document.getElementById('gmail_list_' + dealId);
+  if (!listEl) return;
+  if (!gcalConnected) {
+    listEl.innerHTML = '<div style="color:var(--error)">Not connected to Google.</div>';
+    return;
+  }
+  listEl.innerHTML = '<div>Loading…</div>';
+  try {
+    // Search threads that include the contact's email in from or to.
+    // Gmail q syntax: {from:x to:x} means OR.
+    const q = encodeURIComponent(`{from:${email} to:${email}}`);
+    const listRes = await gmailFetch(`/threads?maxResults=5&q=${q}`);
+    if (!listRes.ok) {
+      if (listRes.status === 403) {
+        listEl.innerHTML = '<div style="color:var(--error)">Access denied — Gmail scope not granted. Disconnect + reconnect Google to re-consent.</div>';
+      } else {
+        listEl.innerHTML = `<div style="color:var(--error)">Gmail request failed (${listRes.status}).</div>`;
+      }
+      return;
+    }
+    const listData = await listRes.json();
+    const threads = listData.threads || [];
+    if (!threads.length) {
+      listEl.innerHTML = '<div>No Gmail threads found for this address.</div>';
+      return;
+    }
+
+    // Fetch each thread's metadata (first message headers + snippet)
+    const details = await Promise.all(threads.map(t =>
+      gmailFetch(`/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`)
+        .then(r => r.ok ? r.json() : null).catch(() => null)
+    ));
+
+    const rows = details.filter(Boolean).map(thread => {
+      const messages = thread.messages || [];
+      if (!messages.length) return '';
+      const latest = messages[messages.length - 1];
+      const headers = (latest.payload && latest.payload.headers) || [];
+      const h = name => {
+        const hdr = headers.find(x => x.name.toLowerCase() === name.toLowerCase());
+        return hdr ? hdr.value : '';
+      };
+      const subject = h('Subject') || '(no subject)';
+      const from = h('From') || '';
+      const dateRaw = h('Date') || '';
+      let dateStr = dateRaw;
+      try { dateStr = new Date(dateRaw).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }); } catch (_) {}
+      const snippet = (latest.snippet || '').slice(0, 140);
+      const msgCount = messages.length;
+      // Encode for onclick — use data attrs + JSON in global for safety
+      window.__gmailThreadCache = window.__gmailThreadCache || {};
+      window.__gmailThreadCache[thread.id] = { subject, from, dateStr, snippet, msgCount, threadId: thread.id };
+      return `
+        <div style="padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;color:var(--white);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(subject)} ${msgCount > 1 ? `<span style="color:var(--muted);font-size:11px;font-weight:400">(${msgCount} messages)</span>` : ''}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(from)}</div>
+              ${snippet ? `<div style="font-size:11.5px;color:var(--muted);margin-top:4px;font-style:italic;line-height:1.4">${escapeHTML(snippet)}${latest.snippet && latest.snippet.length > 140 ? '…' : ''}</div>` : ''}
+            </div>
+            <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <div style="font-size:11px;color:var(--muted)">${escapeHTML(dateStr)}</div>
+              <button class="btn-ghost" style="padding:3px 8px;font-size:10px;width:auto;margin:0" onclick="logGmailThreadAsActivity('${dealId}','${thread.id}')">Log as activity</button>
+              <a href="https://mail.google.com/mail/u/0/#inbox/${thread.id}" target="_blank" rel="noopener" style="font-size:10px;color:var(--yellow);text-decoration:none">Open in Gmail →</a>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+    listEl.innerHTML = rows || '<div>No thread details returned.</div>';
+  } catch (e) {
+    console.warn('[Gmail] fetch failed', e);
+    listEl.innerHTML = '<div style="color:var(--error)">Could not load threads: ' + escapeHTML(e.message || String(e)) + '</div>';
+  }
+}
+
+// One-click: log a Gmail thread into the deal's Activity Timeline.
+async function logGmailThreadAsActivity(dealId, threadId) {
+  const cached = (window.__gmailThreadCache || {})[threadId];
+  if (!cached) { showToast('Thread data missing — reload the list first.', 'error'); return; }
+  const deal = crmDeals.find(d => d.id === dealId);
+  if (!deal) { showToast('Deal not found.', 'error'); return; }
+  const body = `Email: "${cached.subject}" — ${cached.dateStr}${cached.msgCount > 1 ? ` (${cached.msgCount} messages)` : ''}\nFrom: ${cached.from}${cached.snippet ? '\n\n' + cached.snippet : ''}\nhttps://mail.google.com/mail/u/0/#inbox/${threadId}`;
+  try {
+    await logActivity(dealId, 'email', body, deal.contact_id);
+    // Refresh the deal detail so the new activity shows up
+    await loadCRMData();
+    openDealDetail(dealId);
+    showToast('Thread logged as activity.', 'success');
+  } catch (e) {
+    showToast('Could not log activity: ' + (e.message || e), 'error');
+  }
+}
+
+// Called once after the page loads to kick off GIS.
+window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
 
 // =====================================================================
 // END CRM LAYER
