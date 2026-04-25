@@ -1577,7 +1577,8 @@
         <input class="input" id="crmImportFile" type="file" accept=".csv,text/csv" style="padding:10px 12px" />
         <div style="margin-top:8px;font-size:12px;color:var(--muted)">
           <a href="#" id="crmImportTemplateLink" onclick="downloadCRMImportTemplate(event)" style="color:var(--yellow);text-decoration:underline;cursor:pointer">Download CSV template</a>
-          &nbsp;·&nbsp; Expected columns: <code style="background:rgba(0,0,0,0.25);padding:1px 4px;border-radius:3px">first_name, last_name, email, phone, dob, address, zip, annual_income, pipeline, stage, notes</code>
+          &nbsp;·&nbsp; Expected columns: <code style="background:rgba(0,0,0,0.25);padding:1px 4px;border-radius:3px">first_name, last_name, email, phone, dob, address, city, state, zip, annual_income, pipeline, stage, notes, received_on, lead_source</code><br>
+          &nbsp;·&nbsp; <strong style="color:var(--yellow)">Smart parsing:</strong> Notes are scanned for &ldquo;VSoft / Next Gen / Tusha&rdquo; (auto-tags lead source), &ldquo;INCOME: $X&rdquo;, &ldquo;QUOTED: $X&rdquo;, and USHA product names. Existing column values always win.
         </div>
       </div>
 
@@ -1745,23 +1746,16 @@
       <button class="modal-close" onclick="closePolicyModal()">×</button>
     </div>
     <div class="modal-body" style="padding:16px 24px">
+      <!-- SHARED fields — apply to every product in the sale -->
       <div class="field" style="margin-bottom:10px"><label class="label">Carrier <span style="color:var(--error)">*</span></label>
-        <input class="input" id="pol_carrier" type="text" placeholder="e.g. Ambetter, Florida Blue, UnitedHealthcare" /></div>
+        <input class="input" id="pol_carrier" type="text" placeholder="e.g. USHEALTH, Ambetter, Florida Blue" /></div>
       <div class="save-grid-2" style="gap:10px">
-        <div class="field" style="margin-bottom:0"><label class="label">Plan Name</label>
-          <input class="input" id="pol_plan" type="text" placeholder="e.g. Silver 3500 HMO" /></div>
-        <div class="field" style="margin-bottom:0"><label class="label">Policy Number</label>
-          <input class="input" id="pol_number" type="text" /></div>
-      </div>
-      <div class="save-grid-2" style="gap:10px;margin-top:10px">
         <div class="field" style="margin-bottom:0"><label class="label">Effective Date</label>
           <input class="input" id="pol_eff" type="date" /></div>
         <div class="field" style="margin-bottom:0"><label class="label">Renewal Date</label>
           <input class="input" id="pol_renewal" type="date" /></div>
       </div>
       <div class="save-grid-2" style="gap:10px;margin-top:10px">
-        <div class="field" style="margin-bottom:0"><label class="label">Monthly Premium ($)</label>
-          <input class="input" id="pol_premium" type="number" step="0.01" placeholder="e.g. 425.00" /></div>
         <div class="field" style="margin-bottom:0"><label class="label">Status</label>
           <select class="input" id="pol_status">
             <option value="active">Active</option>
@@ -1769,38 +1763,29 @@
             <option value="cancelled">Cancelled</option>
             <option value="expired">Expired</option>
           </select></div>
+        <div class="field" style="margin-bottom:0"><label class="label">State (2-letter)</label>
+          <input class="input" id="pol_state" type="text" maxlength="2" placeholder="FL" style="text-transform:uppercase" /></div>
       </div>
       <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Members Covered</label>
         <input class="input" id="pol_members" type="text" placeholder="e.g. Emanuel, Maria, + 2 kids" /></div>
       <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Notes</label>
         <textarea class="input" id="pol_notes" rows="2" style="resize:vertical;font-family:inherit;padding:8px 12px" placeholder="Copay structure, out-of-pocket max, anything else"></textarea></div>
 
-      <!-- Commission section (collapsible) -->
+      <!-- Per-product stack (Tier 4 multi-product) -->
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600" id="pol_products_header">Products in this sale</div>
+          <div id="pol_products_help" style="font-size:11px;color:var(--muted)">Stack multiple products if you sold a bundle.</div>
+        </div>
+        <div id="pol_products_container"></div>
+        <button class="btn-ghost" id="pol_add_product_btn" style="padding:7px 12px;font-size:12px;width:auto;margin-top:6px;margin-bottom:0" onclick="addPolicyProductRow()">+ Add another product</button>
+      </div>
+
+      <!-- Manual commission override (collapsible, applies to ALL products in this sale) -->
       <details id="pol_commission_section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-        <summary style="cursor:pointer;color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;outline:none;user-select:none">Commission</summary>
+        <summary style="cursor:pointer;color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;outline:none;user-select:none">Manual commission (non-USHA)</summary>
         <div style="margin-top:12px">
-          <!-- USHA quick-pick: when set, auto-calculates from rate book and overrides the manual fields -->
-          <div class="field" style="margin-bottom:10px"><label class="label">USHA Product (rate book auto-calc)</label>
-            <select class="input" id="pol_usha_product" onchange="onUSHAProductChange()">
-              <option value="">— Pick to auto-calculate from USHA schedule —</option>
-            </select>
-          </div>
-          <div class="save-grid-2" style="gap:10px;margin-bottom:10px" id="pol_usha_extra_wrap">
-            <div class="field" style="margin-bottom:0"><label class="label">Coverage Level</label>
-              <select class="input" id="pol_coverage_level">
-                <option value="">— Not specified —</option>
-                <option value="Single">Single</option>
-                <option value="Couple">Couple</option>
-                <option value="Family">Family</option>
-              </select>
-            </div>
-            <div class="field" style="margin-bottom:0"><label class="label">State (2-letter)</label>
-              <input class="input" id="pol_state" type="text" maxlength="2" placeholder="FL" style="text-transform:uppercase" />
-            </div>
-          </div>
-
-          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Or enter a custom commission below (used only if no USHA product is picked above):</div>
-
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Used only when a product row above doesn't have a USHA Product picked. Applied to every non-USHA product in this sale.</div>
           <div class="save-grid-2" style="gap:10px">
             <div class="field" style="margin-bottom:0"><label class="label">Commission Type</label>
               <select class="input" id="pol_commission_type" onchange="onCommissionTypeChange()">
@@ -1825,9 +1810,11 @@
             <div class="field" style="margin-bottom:0"><label class="label">Chargeback Window (months)</label>
               <input class="input" id="pol_chargeback_months" type="number" step="1" placeholder="e.g. 6" /></div>
           </div>
-          <div id="pol_commission_preview" style="margin-top:10px;padding:10px 12px;background:rgba(253,199,47,0.05);border:1px solid rgba(253,199,47,0.15);border-radius:8px;font-size:12px;color:var(--muted);display:none"></div>
         </div>
       </details>
+
+      <!-- Combined live preview across all rows -->
+      <div id="pol_commission_preview" style="margin-top:14px;padding:12px 14px;background:rgba(253,199,47,0.05);border:1px solid rgba(253,199,47,0.15);border-radius:8px;font-size:12px;color:var(--muted);display:none"></div>
 
       <div id="pol_error" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
     </div>
@@ -3518,6 +3505,8 @@ function leadToContactRow(lead, owner_id) {
     phone:      lead.phone || null,
     dob:        lead.dob   || null,
     address:    lead.address || null,
+    city:       lead.city || null,
+    state:      lead.state ? String(lead.state).trim().toUpperCase() : null,
     zip:        lead.zip   || null,
     annual_income: (lead.income != null && !isNaN(lead.income)) ? lead.income : null,
     lead_source: lead.leadSource || null
@@ -5714,17 +5703,80 @@ const CRM_HEADER_ALIASES = {
   phone: 'phone', phone_number: 'phone', mobile: 'phone', cell: 'phone',
   dob: 'dob', date_of_birth: 'dob', birthdate: 'dob', birthday: 'dob',
   address: 'address', street: 'address', street_address: 'address',
+  city: 'city',
+  state: 'state', state_code: 'state', province: 'state',
   zip: 'zip', zip_code: 'zip', postal_code: 'zip', zipcode: 'zip',
   annual_income: 'annual_income', income: 'annual_income', household_income: 'annual_income',
   pipeline: 'pipeline',
   stage: 'stage', deal_stage: 'stage',
   notes: 'notes', note: 'notes', comment: 'notes', comments: 'notes',
-  deal_name: 'deal_name'
+  deal_name: 'deal_name',
+  status: 'status',
+  received_on: 'received_on', received: 'received_on', received_date: 'received_on', date_received: 'received_on',
+  lead_source: 'lead_source', source: 'lead_source', vendor: 'lead_source', vendor_id: 'vendor_id'
 };
 
 function canonicalHeader(h) {
   const n = normalizeHeader(h);
   return CRM_HEADER_ALIASES[n] || n;
+}
+
+// ---------- HEURISTIC NOTES PARSER (Tier 4 import) ----------
+// Existing-client CSVs (Ringy, etc.) often have a free-text Notes field with
+// useful structure embedded ("INCOME: $60,000", "QUOTED: $236", "vsoft").
+// We do best-effort extraction here. Anything we extract goes into the
+// contact / deal row alongside the original notes (we never lose the raw text).
+
+function detectLeadSourceFromText(text) {
+  if (!text) return null;
+  const lower = String(text).toLowerCase();
+  // Order matters — check more-specific terms first ("Next Gen ER" before "Next Gen Lead").
+  if (/\bnext\s*gen\s*er\b/.test(lower)) return 'Next Gen ER';
+  if (/\bnext\s*gen\b/.test(lower)) return 'Next Gen Lead';
+  if (/\bvsoft\b/.test(lower)) return 'VSoft Lead';
+  if (/\btusha\b/.test(lower)) return 'Tusha Lead';
+  if (/\bfacebook\s*ad\b|\bfb\s*ad\b/.test(lower)) return 'Facebook Ad';
+  if (/\breferral\b|\breferred\b|\brefer\s*by\b/.test(lower)) return 'Referral - other';
+  return null;
+}
+
+function extractIncomeFromNotes(notes) {
+  if (!notes) return null;
+  // Match "INCOME: 60,000" / "INCOME: $60k" / "INCOME 60000" / "household income $80,000"
+  // Pull the first dollar-ish number after an INCOME-ish anchor.
+  const m = String(notes).match(/income[^\d$]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*(k\b|thousand)?/i);
+  if (!m) return null;
+  let n = Number(m[1].replace(/,/g, ''));
+  if (isNaN(n)) return null;
+  if (m[2] && /k/i.test(m[2])) n *= 1000;
+  // Sanity bounds — household incomes typically $5k - $5M
+  if (n < 1000 || n > 5000000) return null;
+  return n;
+}
+
+function extractQuotedAmountFromNotes(notes) {
+  if (!notes) return null;
+  // "QUOTED: $236.50" or "Quoted at $750"
+  const m = String(notes).match(/quoted?[^\d$]{0,15}\$?\s*([\d,]+(?:\.\d+)?)/i);
+  if (!m) return null;
+  const n = Number(m[1].replace(/,/g, ''));
+  if (isNaN(n)) return null;
+  if (n < 10 || n > 5000) return null; // reasonable monthly premium range
+  return n;
+}
+
+// Try to detect a USHA product from notes free-text (Premier Choice, Health Access, etc.)
+function detectUSHAProductFromText(text) {
+  if (!text) return null;
+  const lower = String(text).toLowerCase();
+  // Only most distinctive matches — false positives here would corrupt commission calc.
+  if (/\bpremier\s*choice\b/.test(lower)) return 'usha:premier_choice_saw';
+  if (/\bpremier\s*advantage\b/.test(lower)) return 'usha:premier_advantage';
+  if (/\bhealth\s*access\b/.test(lower)) return 'usha:health_access';
+  if (/\bsecure\s*advantage\b/.test(lower)) return 'usha:secure_advantage_saw';
+  if (/\blife\s*protector\b/.test(lower)) return 'usha:life_protector_ii';
+  if (/\bmedguard\b/.test(lower)) return 'usha:medguard_ci';
+  return null;
 }
 
 function downloadCRMImportTemplate(ev) {
@@ -5948,7 +6000,23 @@ async function submitCRMImport() {
     const r = toImport[i];
     progressEl.textContent = `Importing ${i + 1} / ${toImport.length}…`;
     try {
-      // Build a lead-shaped object so we can reuse leadToContactRow / upsertCRMContact
+      const notes = r.data.notes || '';
+      // Heuristic enrichment from free-text notes — best-effort, never overrides
+      // an explicit CSV column.
+      const heuristicSource = detectLeadSourceFromText(notes);
+      const heuristicIncome = extractIncomeFromNotes(notes);
+      const heuristicQuoted = extractQuotedAmountFromNotes(notes);
+      const heuristicProduct = detectUSHAProductFromText(notes);
+      // Income: prefer explicit annual_income column, else heuristic.
+      let income = null;
+      if (r.data.annual_income) {
+        const n = Number(String(r.data.annual_income).replace(/[$,]/g, ''));
+        if (!isNaN(n)) income = n;
+      }
+      if (income == null && heuristicIncome != null) income = heuristicIncome;
+      // Lead source: prefer explicit column, else heuristic.
+      const leadSource = r.data.lead_source || heuristicSource || null;
+
       const leadShape = {
         firstName: r.data.first_name || '',
         name: [r.data.first_name, r.data.last_name].filter(Boolean).join(' ') || r.data.full_name || r.data.email || 'Imported Lead',
@@ -5956,13 +6024,20 @@ async function submitCRMImport() {
         phone: r.data.phone || null,
         dob: r.data.dob || null,
         address: r.data.address || null,
+        city: r.data.city || null,
+        state: r.data.state || null,
         zip: r.data.zip || null,
-        income: (r.data.annual_income && !isNaN(Number(r.data.annual_income.replace(/[$,]/g, ''))))
-          ? Number(r.data.annual_income.replace(/[$,]/g, ''))
-          : null
+        income,
+        leadSource
       };
       const contactId = await upsertCRMContact(leadShape, owner_id);
       const { pipelineId, stageId } = resolveCRMImportTarget(r.data, defaultPipelineId, defaultStageId);
+      // Use received_on as the deal's created_at if present (parses common formats).
+      let createdAt = null;
+      if (r.data.received_on) {
+        const d = new Date(r.data.received_on);
+        if (!isNaN(d.getTime())) createdAt = d.toISOString();
+      }
       const dealRow = {
         owner_id,
         contact_id: contactId,
@@ -5973,12 +6048,25 @@ async function submitCRMImport() {
         quote_data: {
           source: 'csv_import',
           importedAt: new Date().toISOString(),
-          notes: r.data.notes || null,
+          receivedOn: r.data.received_on || null,
+          status: r.data.status || null,
+          notes: notes || null,
           zip: r.data.zip || null,
           annual_income: leadShape.income,
+          // Surface heuristics so they're easy to spot in Deal Detail later.
+          heuristics: {
+            leadSource: heuristicSource,
+            income: heuristicIncome,
+            quotedMonthly: heuristicQuoted,
+            ushaProduct: heuristicProduct
+          },
+          // Acts as a quote snapshot for the Quote History feature.
+          acaMin: heuristicQuoted, acaMax: heuristicQuoted,
           raw: r.data
         }
       };
+      // Only include created_at if explicitly set — Supabase auto-fills otherwise.
+      if (createdAt) dealRow.created_at = createdAt;
       const { error: dealErr } = await crmClient.from('deals').insert(dealRow);
       if (dealErr) throw dealErr;
       success++;
@@ -6924,33 +7012,50 @@ function openPolicyModal(contactId, policyId) {
   const policy = policyId ? crmPolicies.find(p => p.id === policyId) : null;
   crmEditingPolicyId = policyId || null;
   crmEditingPolicyContactId = contactId;
-  document.getElementById('policyModalTitle').textContent = policy ? 'Edit Policy' : 'Add Policy';
+  document.getElementById('policyModalTitle').textContent = policy ? 'Edit Policy' : 'Add Policy / Bundle';
   const name = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'contact';
   document.getElementById('policyModalSub').textContent = 'For ' + name;
+  // Shared (non-product) fields
   document.getElementById('pol_carrier').value   = policy ? (policy.carrier || '') : '';
-  document.getElementById('pol_plan').value      = policy ? (policy.plan_name || '') : '';
-  document.getElementById('pol_number').value    = policy ? (policy.policy_number || '') : '';
   document.getElementById('pol_eff').value       = policy && policy.effective_date ? policy.effective_date : '';
   document.getElementById('pol_renewal').value   = policy && policy.renewal_date ? policy.renewal_date : '';
-  document.getElementById('pol_premium').value   = policy && policy.monthly_premium != null ? policy.monthly_premium : '';
   document.getElementById('pol_status').value    = policy ? (policy.status || 'active') : 'active';
+  document.getElementById('pol_state').value     = policy && policy.state ? policy.state : '';
   document.getElementById('pol_members').value   = policy ? (policy.members_covered || '') : '';
   document.getElementById('pol_notes').value     = policy ? (policy.notes || '') : '';
-  // Commission fields
+  // Manual (non-USHA) commission fallback
   document.getElementById('pol_commission_type').value         = policy && policy.commission_type ? policy.commission_type : '';
   document.getElementById('pol_commission_rate').value         = policy && policy.commission_rate != null ? policy.commission_rate : '';
   document.getElementById('pol_commission_flat_amount').value  = policy && policy.commission_flat_amount != null ? policy.commission_flat_amount : '';
   document.getElementById('pol_term_months').value             = policy && policy.policy_term_months != null ? policy.policy_term_months : '';
   document.getElementById('pol_chargeback_months').value       = policy && policy.chargeback_months != null ? policy.chargeback_months : '';
-  // USHA rate-book fields (Tier 4)
-  populateUSHAProductDropdown();
-  document.getElementById('pol_usha_product').value   = policy && policy.commission_product ? policy.commission_product : '';
-  document.getElementById('pol_coverage_level').value = policy && policy.coverage_level ? policy.coverage_level : '';
-  document.getElementById('pol_state').value          = policy && policy.state ? policy.state : '';
-  // Open the commission section if the policy already has commission set
-  document.getElementById('pol_commission_section').open = !!(policy && (policy.commission_type || policy.commission_product));
+
+  // Build the per-product rows. Edit mode = one row from the existing policy.
+  // New mode = one empty row to start, "+ Add another product" stacks more.
+  if (policy) {
+    window.__policyProductRows = [{
+      usha_product: policy.commission_product || '',
+      plan_name: policy.plan_name || '',
+      policy_number: policy.policy_number || '',
+      monthly_premium: policy.monthly_premium != null ? String(policy.monthly_premium) : '',
+      coverage_level: policy.coverage_level || ''
+    }];
+  } else {
+    window.__policyProductRows = [{ usha_product: '', plan_name: '', policy_number: '', monthly_premium: '', coverage_level: '' }];
+  }
+  // Hide the "+ Add another product" button in edit mode — editing a bundle
+  // would mean turning one policy row into many, which is confusing. Edit
+  // stays single-product; if you need to add to an existing bundle, add a
+  // new policy from the contact's Policies section.
+  document.getElementById('pol_add_product_btn').style.display = policy ? 'none' : '';
+  document.getElementById('pol_products_header').textContent = policy ? 'Product' : 'Products in this sale';
+  document.getElementById('pol_products_help').style.display = policy ? 'none' : '';
+  renderPolicyProductRows();
+
+  // Open the commission section if the policy has manual commission set
+  document.getElementById('pol_commission_section').open = !!(policy && policy.commission_type);
   onCommissionTypeChange();
-  onUSHAProductChange();
+  updatePolicyCommissionPreview();
   document.getElementById('policyDeleteBtn').style.display = policy ? 'inline-block' : 'none';
   document.getElementById('pol_error').style.display = 'none';
   document.getElementById('policyModal').style.display = 'flex';
@@ -6975,84 +7080,171 @@ function onCommissionTypeChange() {
   updateCommissionPreview();
 }
 
-function updateCommissionPreview() {
-  const preview = document.getElementById('pol_commission_preview');
-  const ushaProduct = (document.getElementById('pol_usha_product') || { value: '' }).value;
-  const premium = parseFloat(document.getElementById('pol_premium').value) || 0;
+// Backwards-compat shim — the old `updateCommissionPreview` is still called
+// from a few places. Route it through the new multi-product preview.
+function updateCommissionPreview() { updatePolicyCommissionPreview(); }
 
-  // USHA path takes priority — show first-year + 10-year breakdown.
-  if (ushaProduct) {
-    const calc = calculateUSHACommission({
-      productId: ushaProduct,
-      state: (document.getElementById('pol_state') || { value: '' }).value,
-      coverageLevel: (document.getElementById('pol_coverage_level') || { value: '' }).value,
-      monthlyPremium: premium,
-      policyStartIso: document.getElementById('pol_eff').value || null,
-      isExchangeOrRewrite: false
-    });
-    if (!calc) { preview.style.display = 'none'; return; }
-    const fmt = n => '$' + Number(n || 0).toFixed(2);
-    const breakdownRows = calc.breakdown.slice(0, 5).map(b =>
-      `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>Year ${b.year}</span><span>${(b.rate*100).toFixed(2)}% → ${fmt(b.monthly)}/mo · ${fmt(b.annual)}/yr</span></div>`
+// ---------- POLICY PRODUCT-ROW STATE (Tier 4) ----------
+// window.__policyProductRows holds an array of per-product entries:
+// [{ usha_product, plan_name, policy_number, monthly_premium, coverage_level }, ...]
+// Edit-mode = single row. New-mode = 1+ rows, growable via "+ Add another product".
+
+function renderPolicyProductRows() {
+  const container = document.getElementById('pol_products_container');
+  if (!container) return;
+  const rows = window.__policyProductRows || [];
+  container.innerHTML = rows.map((r, idx) => {
+    const productOpts = USHA_PRODUCTS.map(p =>
+      `<option value="${p.id}"${r.usha_product === p.id ? ' selected' : ''}>${escapeHTML(p.name)}</option>`
     ).join('');
-    preview.style.display = 'block';
-    preview.innerHTML = `
-      <div style="font-size:13px;color:var(--yellow);font-weight:600;margin-bottom:6px">${escapeHTML(calc.productName)}</div>
-      <div style="font-size:12px;color:var(--text);margin-bottom:6px">Commissionable premium: ${fmt(calc.commissionablePremium)}/mo (after ${fmt(calc.totalPremium - calc.commissionablePremium)} non-comm fee)</div>
-      <div style="font-size:12px;color:var(--text);margin-bottom:6px">Year 1: <strong>${fmt(calc.firstYearMonthly)}/mo</strong> · ${fmt(calc.firstYearAnnual)}/yr</div>
-      <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
-        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">First 5 years</div>
-        ${breakdownRows}
-        <div style="font-size:11.5px;color:var(--success);font-weight:600;margin-top:6px">10-year lifetime: ${fmt(calc.lifetimeTotal)}</div>
+    const coverageOpts = ['Single','Couple','Family'].map(c =>
+      `<option value="${c}"${r.coverage_level === c ? ' selected' : ''}>${c}</option>`
+    ).join('');
+    const removeBtn = (rows.length > 1)
+      ? `<button class="btn-ghost" style="padding:6px 10px;width:auto;margin:0;color:var(--muted);align-self:start;margin-top:4px" onclick="removePolicyProductRow(${idx})" title="Remove this product">×</button>`
+      : '';
+    const heading = rows.length > 1 ? `Product #${idx + 1}` : 'Product';
+    return `
+      <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.02)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600">${heading}</div>
+          ${removeBtn}
+        </div>
+        <div class="field" style="margin-bottom:8px"><label class="label">USHA Product (rate book auto-calc)</label>
+          <select class="input" data-pol-row-idx="${idx}" data-pol-row-key="usha_product" onchange="onPolicyProductInput(this)">
+            <option value="">— None / non-USHA —</option>${productOpts}
+          </select>
+        </div>
+        <div class="save-grid-2" style="gap:10px;margin-bottom:8px">
+          <div class="field" style="margin-bottom:0"><label class="label">Plan Name</label>
+            <input class="input" type="text" placeholder="e.g. Silver 3500 HMO" value="${escapeHTML(r.plan_name || '')}" data-pol-row-idx="${idx}" data-pol-row-key="plan_name" oninput="onPolicyProductInput(this)" /></div>
+          <div class="field" style="margin-bottom:0"><label class="label">Policy Number</label>
+            <input class="input" type="text" value="${escapeHTML(r.policy_number || '')}" data-pol-row-idx="${idx}" data-pol-row-key="policy_number" oninput="onPolicyProductInput(this)" /></div>
+        </div>
+        <div class="save-grid-2" style="gap:10px">
+          <div class="field" style="margin-bottom:0"><label class="label">Monthly Premium ($)</label>
+            <input class="input" type="number" step="0.01" placeholder="e.g. 425.00" value="${escapeHTML(r.monthly_premium || '')}" data-pol-row-idx="${idx}" data-pol-row-key="monthly_premium" oninput="onPolicyProductInput(this)" /></div>
+          <div class="field" style="margin-bottom:0"><label class="label">Coverage Level</label>
+            <select class="input" data-pol-row-idx="${idx}" data-pol-row-key="coverage_level" onchange="onPolicyProductInput(this)">
+              <option value="">—</option>${coverageOpts}
+            </select>
+          </div>
+        </div>
       </div>`;
-    return;
+  }).join('');
+}
+
+function onPolicyProductInput(el) {
+  const idx = parseInt(el.dataset.polRowIdx);
+  const key = el.dataset.polRowKey;
+  if (isNaN(idx) || !key) return;
+  if (!window.__policyProductRows[idx]) return;
+  window.__policyProductRows[idx][key] = el.value;
+  updatePolicyCommissionPreview();
+}
+
+function addPolicyProductRow() {
+  if (!Array.isArray(window.__policyProductRows)) window.__policyProductRows = [];
+  window.__policyProductRows.push({ usha_product: '', plan_name: '', policy_number: '', monthly_premium: '', coverage_level: '' });
+  renderPolicyProductRows();
+  updatePolicyCommissionPreview();
+}
+
+function removePolicyProductRow(idx) {
+  if (!Array.isArray(window.__policyProductRows)) return;
+  if (window.__policyProductRows.length <= 1) return;
+  window.__policyProductRows.splice(idx, 1);
+  renderPolicyProductRows();
+  updatePolicyCommissionPreview();
+}
+
+// Combined commission preview across all product rows in this sale.
+function updatePolicyCommissionPreview() {
+  const preview = document.getElementById('pol_commission_preview');
+  if (!preview) return;
+  const rows = (window.__policyProductRows || []).filter(r => parseFloat(r.monthly_premium) > 0);
+  if (!rows.length) { preview.style.display = 'none'; return; }
+  const sharedState = (document.getElementById('pol_state') || { value: '' }).value || '';
+  const sharedEff = (document.getElementById('pol_eff') || { value: '' }).value || null;
+  const fmt = n => '$' + Number(n || 0).toFixed(2);
+
+  // Compute per-row commission. USHA rows go through the rate book; non-USHA
+  // rows fall back to the manual commission fields shared at the bottom.
+  const manualType = document.getElementById('pol_commission_type').value || '';
+  const manualRate = parseFloat(document.getElementById('pol_commission_rate').value) || 0;
+  const manualFlat = parseFloat(document.getElementById('pol_commission_flat_amount').value) || 0;
+  const manualTerm = parseInt(document.getElementById('pol_term_months').value) || 12;
+
+  const lines = [];
+  let totalY1Monthly = 0;
+  let totalLifetime = 0;
+  for (const r of rows) {
+    const premium = parseFloat(r.monthly_premium) || 0;
+    if (r.usha_product) {
+      const calc = calculateUSHACommission({
+        productId: r.usha_product,
+        state: sharedState,
+        coverageLevel: r.coverage_level,
+        monthlyPremium: premium,
+        policyStartIso: sharedEff,
+        isExchangeOrRewrite: false
+      });
+      if (!calc) continue;
+      lines.push({
+        name: calc.productName,
+        info: `Comm. premium ${fmt(calc.commissionablePremium)}/mo · ${(calc.breakdown[0].rate*100).toFixed(2)}% Y1`,
+        y1: calc.firstYearMonthly,
+        lifetime: calc.lifetimeTotal
+      });
+      totalY1Monthly += calc.firstYearMonthly;
+      totalLifetime += calc.lifetimeTotal;
+    } else if (manualType) {
+      const est = estimateCommission({
+        commission_type: manualType, commission_rate: manualRate, commission_flat_amount: manualFlat,
+        monthly_premium: premium, policy_term_months: manualTerm
+      });
+      if (est.total === 0) continue;
+      lines.push({
+        name: r.plan_name || 'Custom commission',
+        info: est.description,
+        y1: est.monthly,
+        lifetime: est.monthly * manualTerm
+      });
+      totalY1Monthly += est.monthly;
+      totalLifetime += est.monthly * manualTerm;
+    }
   }
 
-  // Manual path (original logic)
-  const type = document.getElementById('pol_commission_type').value;
-  const rate = parseFloat(document.getElementById('pol_commission_rate').value) || 0;
-  const flat = parseFloat(document.getElementById('pol_commission_flat_amount').value) || 0;
-  const term = parseInt(document.getElementById('pol_term_months').value) || 12;
-  const est = estimateCommission({
-    commission_type: type,
-    commission_rate: rate,
-    commission_flat_amount: flat,
-    monthly_premium: premium,
-    policy_term_months: term
-  });
-  if (!type || est.total === 0) { preview.style.display = 'none'; return; }
+  if (!lines.length) { preview.style.display = 'none'; return; }
+
+  const lineHTML = lines.map(l => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11.5px;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="color:var(--white);font-weight:500">${escapeHTML(l.name)}</div>
+        <div style="color:var(--muted);font-size:10.5px;margin-top:1px">${escapeHTML(l.info)}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="color:var(--yellow);font-weight:600">${fmt(l.y1)}/mo Y1</div>
+        <div style="color:var(--success);font-size:10.5px">${fmt(l.lifetime)} 10-yr</div>
+      </div>
+    </div>`).join('');
   preview.style.display = 'block';
-  preview.innerHTML = `<span style="color:var(--yellow);font-weight:600">Estimated commission:</span> ${est.description}`;
+  preview.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Combined commission preview</div>
+    ${lineHTML}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:6px;border-top:2px solid var(--yellow)">
+      <div style="color:var(--white);font-weight:600;font-size:12px">Total</div>
+      <div style="text-align:right">
+        <div style="color:var(--yellow);font-weight:700;font-size:14px">${fmt(totalY1Monthly)}/mo Y1 · ${fmt(totalY1Monthly * 12)}/yr</div>
+        <div style="color:var(--success);font-weight:600;font-size:11.5px">${fmt(totalLifetime)} over 10 years</div>
+      </div>
+    </div>`;
 }
 
-// Populate the USHA product dropdown once on policy modal open.
-function populateUSHAProductDropdown() {
-  const sel = document.getElementById('pol_usha_product');
-  if (!sel || sel.dataset.populated === '1') return;
-  sel.dataset.populated = '1';
-  for (const prod of USHA_PRODUCTS) {
-    const opt = document.createElement('option');
-    opt.value = prod.id;
-    opt.textContent = prod.name;
-    sel.appendChild(opt);
-  }
-}
-
-// When the USHA product changes, refresh the live preview and dim the manual fields.
-function onUSHAProductChange() {
-  const ushaProduct = (document.getElementById('pol_usha_product') || { value: '' }).value;
-  const manualFields = ['pol_commission_type','pol_commission_rate','pol_commission_flat_amount'];
-  manualFields.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.opacity = ushaProduct ? '0.5' : '';
-  });
-  updateCommissionPreview();
-}
-
-// Live re-calc when key inputs change.
-['pol_premium','pol_eff','pol_coverage_level','pol_state'].forEach(id => {
+// Re-run preview when shared fields change.
+['pol_eff','pol_state','pol_commission_type','pol_commission_rate','pol_commission_flat_amount','pol_term_months'].forEach(id => {
   const el = document.getElementById(id);
-  if (el) el.addEventListener('input', updateCommissionPreview);
+  if (el) el.addEventListener('input', updatePolicyCommissionPreview);
 });
 
 function closePolicyModal() {
@@ -7066,46 +7258,74 @@ async function savePolicyFromModal() {
   const carrier = document.getElementById('pol_carrier').value.trim();
   if (!carrier) { err.textContent = 'Carrier is required.'; err.style.display = 'block'; return; }
   if (!crmEditingPolicyContactId) { err.textContent = 'Missing contact.'; err.style.display = 'block'; return; }
-  const row = {
+
+  // Shared fields applied to every product row in the sale.
+  const shared = {
     owner_id: crmUser.id,
     contact_id: crmEditingPolicyContactId,
     deal_id: crmEditingDealId || null,
     carrier,
-    plan_name:     document.getElementById('pol_plan').value.trim()   || null,
-    policy_number: document.getElementById('pol_number').value.trim() || null,
     effective_date: document.getElementById('pol_eff').value || null,
     renewal_date:   document.getElementById('pol_renewal').value || null,
-    monthly_premium: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_premium').value.trim()),
     status: document.getElementById('pol_status').value,
     members_covered: document.getElementById('pol_members').value.trim() || null,
     notes: document.getElementById('pol_notes').value.trim() || null,
+    state: (document.getElementById('pol_state').value || '').trim().toUpperCase() || null,
     commission_type: document.getElementById('pol_commission_type').value || null,
     commission_rate: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_commission_rate').value.trim()),
     commission_flat_amount: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_commission_flat_amount').value.trim()),
     policy_term_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_term_months').value.trim()),
-    chargeback_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_chargeback_months').value.trim()),
-    // Tier 4 — USHA rate-book fields. When commission_product is set, the
-    // estimateCommission helper derives values from USHA_PRODUCTS instead of
-    // the manual commission_type/rate fields above.
-    commission_product: document.getElementById('pol_usha_product').value || null,
-    coverage_level: document.getElementById('pol_coverage_level').value || null,
-    state: (document.getElementById('pol_state').value || '').trim().toUpperCase() || null
+    chargeback_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_chargeback_months').value.trim())
   };
+
+  // Validate: at least one row must have a premium.
+  const productRows = (window.__policyProductRows || []).filter(r =>
+    parseFloat(r.monthly_premium) > 0 || r.usha_product || r.plan_name
+  );
+  if (!productRows.length) {
+    err.textContent = 'Add at least one product with a monthly premium.';
+    err.style.display = 'block';
+    return;
+  }
+
   const saveBtn = document.getElementById('policySaveBtn');
   saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
   try {
     if (crmEditingPolicyId) {
+      // EDIT mode — single policy, single row.
+      const r = productRows[0];
+      const row = {
+        ...shared,
+        plan_name:        r.plan_name || null,
+        policy_number:    r.policy_number || null,
+        monthly_premium:  r.monthly_premium === '' ? null : Number(r.monthly_premium),
+        commission_product: r.usha_product || null,
+        coverage_level:   r.coverage_level || null
+      };
       const { error } = await crmClient.from('policies').update(row).eq('id', crmEditingPolicyId);
       if (error) throw error;
+      closePolicyModal();
+      await loadCRMData();
+      if (crmEditingDealId) openDealDetail(crmEditingDealId);
+      showToast('Policy updated.', 'success');
     } else {
-      const { error } = await crmClient.from('policies').insert(row);
+      // NEW mode — insert N policy rows, one per product entry.
+      const rowsToInsert = productRows.map(r => ({
+        ...shared,
+        plan_name:        r.plan_name || null,
+        policy_number:    r.policy_number || null,
+        monthly_premium:  r.monthly_premium === '' ? null : Number(r.monthly_premium),
+        commission_product: r.usha_product || null,
+        coverage_level:   r.coverage_level || null
+      }));
+      const { error } = await crmClient.from('policies').insert(rowsToInsert);
       if (error) throw error;
+      closePolicyModal();
+      await loadCRMData();
+      if (crmEditingDealId) openDealDetail(crmEditingDealId);
+      const n = rowsToInsert.length;
+      showToast(`${n} polic${n === 1 ? 'y' : 'ies'} added.`, 'success');
     }
-    const wasEdit = !!crmEditingPolicyId;
-    closePolicyModal();
-    await loadCRMData();
-    if (crmEditingDealId) openDealDetail(crmEditingDealId);
-    showToast(wasEdit ? 'Policy updated.' : 'Policy added.', 'success');
   } catch (e) {
     err.textContent = (e.message || 'Could not save policy.');
     err.style.display = 'block';
@@ -7780,88 +8000,193 @@ function renderCRMReports() {
         ` : emptyCard('No policies yet.')}
       </div>
 
-      <!-- USHA forecast / what-if (Tier 4) -->
+      <!-- USHA forecast / what-if (Tier 4 — multi-product) -->
       <div class="card" style="margin-top:14px;margin-bottom:0">
-        <div class="card-title" style="margin-bottom:12px">USHA — Forecast a new policy</div>
+        <div class="card-title" style="margin-bottom:6px">USHA — Forecast a sale</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Stack multiple products in a single sale (e.g., a base health plan + Accident Protector + Dental). Click <strong>+ Add product</strong> to layer more.</div>
+        <!-- Shared inputs -->
         <div class="save-grid-2" style="gap:10px;margin-bottom:10px">
-          <div class="field" style="margin-bottom:0"><label class="label">Product</label>
-            <select class="input" id="forecastProduct" onchange="renderUSHAForecast()">
-              <option value="">— Pick one —</option>
-              ${USHA_PRODUCTS.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}
-            </select>
+          <div class="field" style="margin-bottom:0"><label class="label">State (shared)</label>
+            <input class="input" id="forecastState" type="text" maxlength="2" placeholder="FL" style="text-transform:uppercase" oninput="renderUSHAForecast()" />
           </div>
-          <div class="field" style="margin-bottom:0"><label class="label">Monthly Premium ($)</label>
-            <input class="input" id="forecastPremium" type="number" step="1" placeholder="e.g. 250" oninput="renderUSHAForecast()" />
-          </div>
-        </div>
-        <div class="save-grid-2" style="gap:10px;margin-bottom:10px">
-          <div class="field" style="margin-bottom:0"><label class="label">Coverage Level</label>
-            <select class="input" id="forecastCoverage" onchange="renderUSHAForecast()">
-              <option value="">— Not specified —</option>
-              <option value="Single">Single</option>
-              <option value="Couple">Couple</option>
-              <option value="Family">Family</option>
-            </select>
-          </div>
-          <div class="field" style="margin-bottom:0"><label class="label"># of Policies (multiplier)</label>
+          <div class="field" style="margin-bottom:0"><label class="label"># of Sales (multiplier)</label>
             <input class="input" id="forecastCount" type="number" step="1" min="1" value="1" oninput="renderUSHAForecast()" />
           </div>
         </div>
-        <div class="field" style="margin-bottom:10px"><label class="label">State (2-letter)</label>
-          <input class="input" id="forecastState" type="text" maxlength="2" placeholder="FL" style="text-transform:uppercase;max-width:120px" oninput="renderUSHAForecast()" />
-        </div>
+
+        <!-- Per-product rows are rendered into here -->
+        <div id="forecastRowsContainer" style="margin-bottom:10px"></div>
+
+        <button class="btn-ghost" style="padding:8px 14px;font-size:12px;width:auto;margin-top:0;margin-bottom:14px" onclick="addForecastRow()">+ Add product</button>
+
         <div id="forecastResult" style="font-size:12.5px;color:var(--muted);padding:14px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;text-align:center">
           Pick a product and enter a premium to see projected commission.
         </div>
       </div>
     </div>
   `;
+  // Initialize the rows container (preserves user's prior rows if they bounce out and back).
+  if (!Array.isArray(window.__forecastRows) || !window.__forecastRows.length) {
+    window.__forecastRows = [{ productId: '', premium: '', coverage: '' }];
+  }
+  renderForecastRows();
+  renderUSHAForecast();
 }
 
-// Render the forecast result panel — called on every input change.
+// Re-render the per-product input rows. Called only on add/remove of a row,
+// NOT on every keystroke — that would steal focus mid-type.
+function renderForecastRows() {
+  const container = document.getElementById('forecastRowsContainer');
+  if (!container) return;
+  const rows = window.__forecastRows || [];
+  container.innerHTML = rows.map((r, idx) => {
+    const productOpts = USHA_PRODUCTS.map(p =>
+      `<option value="${p.id}"${r.productId === p.id ? ' selected' : ''}>${escapeHTML(p.name)}</option>`
+    ).join('');
+    const coverageOpts = ['Single','Couple','Family'].map(c =>
+      `<option value="${c}"${r.coverage === c ? ' selected' : ''}>${c}</option>`
+    ).join('');
+    const removeBtn = rows.length > 1
+      ? `<button class="btn-ghost" style="padding:8px 12px;width:auto;margin:0;color:var(--muted);align-self:end" onclick="removeForecastRow(${idx})" title="Remove this product">×</button>`
+      : `<div style="width:36px"></div>`; // placeholder so the grid stays aligned
+    return `
+      <div style="display:grid;grid-template-columns:2.2fr 1fr 1.1fr auto;gap:8px;margin-bottom:8px;align-items:end;padding:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
+        <div class="field" style="margin:0"><label class="label" style="font-size:10.5px">Product${rows.length > 1 ? ' #' + (idx + 1) : ''}</label>
+          <select class="input" data-forecast-idx="${idx}" data-forecast-key="productId" onchange="onForecastInput(this)">
+            <option value="">— Pick —</option>${productOpts}
+          </select>
+        </div>
+        <div class="field" style="margin:0"><label class="label" style="font-size:10.5px">Monthly $</label>
+          <input class="input" type="number" step="1" placeholder="250" value="${r.premium || ''}" data-forecast-idx="${idx}" data-forecast-key="premium" oninput="onForecastInput(this)" />
+        </div>
+        <div class="field" style="margin:0"><label class="label" style="font-size:10.5px">Coverage</label>
+          <select class="input" data-forecast-idx="${idx}" data-forecast-key="coverage" onchange="onForecastInput(this)">
+            <option value="">—</option>${coverageOpts}
+          </select>
+        </div>
+        ${removeBtn}
+      </div>`;
+  }).join('');
+}
+
+// On any per-row input change: update the model and re-render only the result.
+function onForecastInput(el) {
+  const idx = parseInt(el.dataset.forecastIdx);
+  const key = el.dataset.forecastKey;
+  if (isNaN(idx) || !key) return;
+  if (!window.__forecastRows[idx]) return;
+  window.__forecastRows[idx][key] = el.value;
+  renderUSHAForecast();
+}
+
+function addForecastRow() {
+  if (!Array.isArray(window.__forecastRows)) window.__forecastRows = [];
+  window.__forecastRows.push({ productId: '', premium: '', coverage: '' });
+  renderForecastRows();
+  renderUSHAForecast();
+}
+
+function removeForecastRow(idx) {
+  if (!Array.isArray(window.__forecastRows)) return;
+  if (window.__forecastRows.length <= 1) return;
+  window.__forecastRows.splice(idx, 1);
+  renderForecastRows();
+  renderUSHAForecast();
+}
+
+// Compute the combined projection across all forecast rows.
 function renderUSHAForecast() {
-  const productId = (document.getElementById('forecastProduct') || { value: '' }).value;
-  const premium = parseFloat((document.getElementById('forecastPremium') || { value: '' }).value) || 0;
-  const coverage = (document.getElementById('forecastCoverage') || { value: '' }).value;
-  const state = ((document.getElementById('forecastState') || { value: '' }).value || '').toUpperCase();
-  const count = Math.max(1, parseInt((document.getElementById('forecastCount') || { value: '1' }).value) || 1);
   const out = document.getElementById('forecastResult');
   if (!out) return;
-  if (!productId || premium <= 0) {
+  const state = ((document.getElementById('forecastState') || { value: '' }).value || '').toUpperCase();
+  const count = Math.max(1, parseInt((document.getElementById('forecastCount') || { value: '1' }).value) || 1);
+  const rows = (window.__forecastRows || []).filter(r => r.productId && parseFloat(r.premium) > 0);
+  if (!rows.length) {
     out.innerHTML = 'Pick a product and enter a premium to see projected commission.';
     return;
   }
-  const calc = calculateUSHACommission({
-    productId, state, coverageLevel: coverage,
-    monthlyPremium: premium, policyStartIso: null, isExchangeOrRewrite: false
-  });
-  if (!calc) { out.innerHTML = 'Could not find a rate for that combo.'; return; }
+  const calcs = rows.map(r => calculateUSHACommission({
+    productId: r.productId, state, coverageLevel: r.coverage,
+    monthlyPremium: parseFloat(r.premium) || 0,
+    policyStartIso: null, isExchangeOrRewrite: false
+  })).filter(Boolean);
+  if (!calcs.length) {
+    out.innerHTML = 'Could not find a rate for that combo.';
+    return;
+  }
   const fmt = n => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-  const rows = calc.breakdown.map(b =>
+
+  // Per-product summary row
+  const perProduct = calcs.map(c => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px">
+      <div style="flex:1;min-width:0">
+        <div style="color:var(--white);font-weight:500">${escapeHTML(c.productName)}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:1px">Comm. premium ${fmt(c.commissionablePremium)}/mo · ${(c.breakdown[0].rate*100).toFixed(2)}% Y1</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;margin-left:10px">
+        <div style="color:var(--yellow);font-weight:600">${fmt(c.firstYearMonthly * count)}/mo Y1</div>
+        <div style="font-size:10.5px;color:var(--success)">${fmt(c.lifetimeTotal * count)} 10-yr</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Combined per-year breakdown — sum across all calcs
+  const combined = [];
+  for (let y = 1; y <= 10; y++) {
+    let monthly = 0, annual = 0;
+    for (const c of calcs) {
+      const e = c.breakdown[y - 1];
+      if (e) { monthly += e.monthly; annual += e.annual; }
+    }
+    combined.push({ year: y, monthly: monthly * count, annual: annual * count });
+  }
+  const yearRows = combined.map(b =>
     `<tr style="border-bottom:1px solid var(--border)">
        <td style="padding:5px 8px;font-size:11.5px;color:var(--muted)">Year ${b.year}</td>
-       <td style="padding:5px 8px;font-size:11.5px;color:var(--muted);text-align:right">${(b.rate*100).toFixed(2)}%</td>
-       <td style="padding:5px 8px;font-size:11.5px;text-align:right">${fmt(b.monthly * count)}/mo</td>
-       <td style="padding:5px 8px;font-size:11.5px;text-align:right;color:var(--yellow)">${fmt(b.annual * count)}</td>
+       <td style="padding:5px 8px;font-size:11.5px;text-align:right">${fmt(b.monthly)}/mo</td>
+       <td style="padding:5px 8px;font-size:11.5px;text-align:right;color:var(--yellow)">${fmt(b.annual)}</td>
      </tr>`
   ).join('');
-  const lifetimeAtCount = calc.lifetimeTotal * count;
+
+  // Grand totals
+  const totalFirstYearMonthly = calcs.reduce((s, c) => s + c.firstYearMonthly, 0) * count;
+  const totalLifetime = calcs.reduce((s, c) => s + c.lifetimeTotal, 0) * count;
+  const totalCommPremium = calcs.reduce((s, c) => s + c.commissionablePremium, 0);
+  const totalNonComm = calcs.reduce((s, c) => s + (c.totalPremium - c.commissionablePremium), 0);
+
   out.innerHTML = `
     <div style="text-align:left">
-      <div style="font-size:13px;color:var(--white);margin-bottom:4px"><strong>${escapeHTML(calc.productName)}</strong>${count > 1 ? ` × ${count}` : ''}</div>
-      <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Commissionable premium: ${fmt(calc.commissionablePremium)}/mo · ${fmt(calc.commissionablePremium - calc.totalPremium > 0 ? 0 : (calc.totalPremium - calc.commissionablePremium))} non-comm fee</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div style="font-size:13px;color:var(--white)"><strong>${calcs.length} product${calcs.length === 1 ? '' : 's'} per sale</strong>${count > 1 ? ` × ${count} sale${count === 1 ? '' : 's'}` : ''}</div>
+        <div style="font-size:11px;color:var(--muted)">Comm. premium total: ${fmt(totalCommPremium * count)}/mo${totalNonComm > 0 ? ` · ${fmt(totalNonComm * count)} non-comm fees` : ''}</div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:8px;margin-bottom:12px;background:rgba(255,255,255,0.02)">
+        ${perProduct}
+      </div>
+
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Combined per-year</div>
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="border-bottom:1px solid var(--border)">
             <th style="padding:5px 8px;text-align:left;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Year</th>
-            <th style="padding:5px 8px;text-align:right;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Rate</th>
             <th style="padding:5px 8px;text-align:right;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Monthly</th>
             <th style="padding:5px 8px;text-align:right;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Annual</th>
           </tr>
         </thead>
-        <tbody>${rows}</tbody>
+        <tbody>${yearRows}</tbody>
       </table>
-      <div style="font-size:13px;color:var(--success);font-weight:600;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);text-align:right">10-year lifetime: ${fmt(lifetimeAtCount)}</div>
+
+      <div style="margin-top:14px;padding-top:12px;border-top:2px solid var(--yellow);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">Year 1 total</div>
+          <div style="font-size:18px;color:var(--yellow);font-family:'Playfair Display',serif">${fmt(totalFirstYearMonthly)}/mo · ${fmt(totalFirstYearMonthly * 12)}/yr</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">10-year lifetime</div>
+          <div style="font-size:20px;color:var(--success);font-family:'Playfair Display',serif">${fmt(totalLifetime)}</div>
+        </div>
+      </div>
     </div>
   `;
 }
