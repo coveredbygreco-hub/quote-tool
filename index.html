@@ -1003,6 +1003,32 @@
   /* ============ END SAVE LEAD FEATURE ============ */
 
   /* ============================================================
+     MODAL STACKING (z-index tiers) — ensures child modals always
+     render ABOVE their parents. Without this, opening the Email
+     Template picker from inside a Deal Detail modal could leave
+     the picker hidden behind the deal modal because both shared
+     `.modal-overlay { z-index: 100 }`.
+     ============================================================ */
+  /* Base layer — top-level workspace and login */
+  #crmWorkspaceModal,
+  #crmLoginModal { z-index: 100; }
+  /* Mid layer — opened from the workspace */
+  #dealDetailModal,
+  #crmImportModal,
+  #crmSettingsModalV2 { z-index: 150; }
+  /* Top layer — opened from a mid-layer modal */
+  #taskModal,
+  #policyModal,
+  #emailTplModal,
+  #saveLeadModal,
+  #savedLeadsModal,
+  #crmChangePasswordModal,
+  #crmSettingsModal { z-index: 200; }
+  /* Confirm dialogs and toasts always win */
+  #confirmModal { z-index: 300; }
+  .toast { z-index: 1000 !important; }
+
+  /* ============================================================
      MOBILE LAYOUT (Tier 3) — overrides desktop assumptions when
      viewport is iPhone-sized (<= 720px). Targets the CRM
      workspace + modals + pipeline + tasks + deal detail. Quote
@@ -1372,10 +1398,11 @@
           <option value="Referral - existing client">Referral — existing client</option>
           <option value="Referral - other">Referral — other</option>
           <option value="Facebook Ad">Facebook Ad</option>
-          <option value="Google / Web search">Google / Web search</option>
-          <option value="Cold call / outreach">Cold call / outreach</option>
+          <option value="Next Gen Lead">Next Gen Lead</option>
+          <option value="Next Gen ER">Next Gen ER</option>
+          <option value="VSoft Lead">VSoft Lead</option>
+          <option value="Tusha Lead">Tusha Lead</option>
           <option value="Networking event">Networking event</option>
-          <option value="Walk-in">Walk-in</option>
           <option value="Other">Other</option>
         </select>
       </div>
@@ -1567,6 +1594,62 @@
   </div>
 </div>
 
+<!-- SETTINGS MODAL (Tier 4 — consolidated from Connect Google + CRM Connection + Change Password) -->
+<div id="crmSettingsModalV2" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">⚙ Settings</div>
+        <div class="modal-sub">Connections, account, and tools — all in one place</div>
+      </div>
+      <button class="modal-close" onclick="closeSettingsModalV2()">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- Google connection -->
+      <div style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">Google (Calendar + Gmail)</div>
+            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">Sync tasks to Google Calendar and read Gmail threads inside Deal Detail. <span id="settingsV2_gcalState">—</span></div>
+          </div>
+          <button class="btn-ghost" id="settingsV2_gcalBtn" onclick="gcalToggleConnection(); setTimeout(refreshSettingsModalV2State, 400)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0">—</button>
+        </div>
+      </div>
+
+      <!-- Supabase / CRM database connection -->
+      <div style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">CRM Database (Supabase)</div>
+            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">Where contacts, deals, tasks, and policies are stored. <span id="settingsV2_dbState">—</span></div>
+          </div>
+          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(openCRMSettings, 50)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0">Configure</button>
+        </div>
+      </div>
+
+      <!-- Change password -->
+      <div style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">Account password</div>
+            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">Update the password you use to sign in to the CRM.</div>
+          </div>
+          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(openCRMChangePassword, 50)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0">Change</button>
+        </div>
+      </div>
+
+      <!-- Quick reference -->
+      <div class="modal-note" style="margin-top:8px;font-size:11.5px;line-height:1.5">
+        <div style="margin-bottom:6px"><strong>Tip:</strong> If "Connect Google" returns an error mentioning <code>file://</code>, you opened the HTML locally instead of via the live URL. Always test on <code>coveredbygreco-hub.github.io/quote-tool/</code>.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div style="flex:1"></div>
+      <button class="btn-primary" style="width:auto;padding:10px 20px;margin-top:0" onclick="closeSettingsModalV2()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- CRM WORKSPACE MODAL (pipelines + dashboard live here) -->
 <div id="crmWorkspaceModal" class="modal-overlay" style="display:none">
   <div class="modal leads-modal" style="max-width:1100px">
@@ -1583,6 +1666,7 @@
       <button class="settings-gear" id="crmTabTasks" onclick="showCRMTab('tasks')">Tasks <span id="crmTaskBadge" style="display:none;background:var(--error);color:#fff;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabRenewals" onclick="showCRMTab('renewals')">Renewals <span id="crmRenewalBadge" style="display:none;background:var(--yellow);color:var(--navy);padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabCommissions" onclick="showCRMTab('commissions')">Commissions</button>
+      <button class="settings-gear" id="crmTabReports" onclick="showCRMTab('reports')">Reports</button>
       <div style="position:relative;flex:1;min-width:200px;max-width:340px;margin:0 4px">
         <input id="crmSearchBar" type="text" placeholder="Search contacts, deals, email, phone…" autocomplete="off"
                oninput="crmHandleSearch(this.value)" onfocus="crmHandleSearch(this.value)"
@@ -1593,11 +1677,13 @@
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Import CSV
       </button>
-      <button class="settings-gear" id="gcalConnectBtn" onclick="gcalToggleConnection()" title="Connect Google Calendar + Gmail">
-        <span id="gcalConnectLabel">Connect Google</span>
+      <button class="settings-gear" onclick="openSettingsModalV2()" title="Connections, password, and other settings">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        Settings
       </button>
-      <button class="settings-gear" onclick="openCRMChangePassword()">Change Password</button>
-      <button class="settings-gear" onclick="openCRMSettings()">Connection</button>
       <button class="settings-gear" onclick="crmSignOut()">Sign out</button>
     </div>
     <div class="modal-body" id="crmWorkspaceBody" style="min-height:420px">
@@ -1691,8 +1777,30 @@
 
       <!-- Commission section (collapsible) -->
       <details id="pol_commission_section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-        <summary style="cursor:pointer;color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;outline:none;user-select:none">Commission (optional)</summary>
+        <summary style="cursor:pointer;color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;outline:none;user-select:none">Commission</summary>
         <div style="margin-top:12px">
+          <!-- USHA quick-pick: when set, auto-calculates from rate book and overrides the manual fields -->
+          <div class="field" style="margin-bottom:10px"><label class="label">USHA Product (rate book auto-calc)</label>
+            <select class="input" id="pol_usha_product" onchange="onUSHAProductChange()">
+              <option value="">— Pick to auto-calculate from USHA schedule —</option>
+            </select>
+          </div>
+          <div class="save-grid-2" style="gap:10px;margin-bottom:10px" id="pol_usha_extra_wrap">
+            <div class="field" style="margin-bottom:0"><label class="label">Coverage Level</label>
+              <select class="input" id="pol_coverage_level">
+                <option value="">— Not specified —</option>
+                <option value="Single">Single</option>
+                <option value="Couple">Couple</option>
+                <option value="Family">Family</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0"><label class="label">State (2-letter)</label>
+              <input class="input" id="pol_state" type="text" maxlength="2" placeholder="FL" style="text-transform:uppercase" />
+            </div>
+          </div>
+
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Or enter a custom commission below (used only if no USHA product is picked above):</div>
+
           <div class="save-grid-2" style="gap:10px">
             <div class="field" style="margin-bottom:0"><label class="label">Commission Type</label>
               <select class="input" id="pol_commission_type" onchange="onCommissionTypeChange()">
@@ -4142,6 +4250,21 @@ const BROKER_INFO = {
   signoff: 'Talk soon,\nEmanuel'
 };
 
+// Single source of truth for the Lead Source dropdown options. Used by the
+// Deal Detail modal; the Save Lead modal's `<select>` is static HTML and
+// must be kept in sync manually if this list changes.
+window.LEAD_SOURCE_OPTIONS = [
+  'Referral - existing client',
+  'Referral - other',
+  'Facebook Ad',
+  'Next Gen Lead',
+  'Next Gen ER',
+  'VSoft Lead',
+  'Tusha Lead',
+  'Networking event',
+  'Other'
+];
+
 const EMAIL_TEMPLATES = [
   {
     id: 'first_quote',
@@ -4521,7 +4644,10 @@ async function autoCreateRenewalTasks() {
       : 'client';
     const carrier = p.carrier || 'policy';
     const title = `${AUTO_RENEWAL_PREFIX} ${contactName} (${carrier})`;
-    if (hasOpenAutoTask(p.contact_id, p.id, AUTO_RENEWAL_PREFIX, dueIso)) continue;
+    // Dedup: skip if ANY open task exists for this policy (regardless of title).
+    // Catches both auto-created and manually-created renewal tasks.
+    const alreadyHandled = crmTasks.some(t => !t.completed && t.policy_id === p.id);
+    if (alreadyHandled) continue;
     const ok = await insertAutoTask({
       title,
       due_date: dueIso,
@@ -4674,6 +4800,393 @@ function renderBirthdaysThisMonth() {
         <span style="font-size:11px;color:var(--muted)">${dateLabel} · turning ${it.turning}</span>
       </div>`;
   }).join('');
+}
+
+// ---------- OEP CAMPAIGN MODE (Tier 4) ----------
+// OEP = Open Enrollment Period for ACA plans, Nov 1 – Jan 15.
+// 75 days of 10× normal volume. This module surfaces:
+//   • Banner on the dashboard showing days-until or days-remaining.
+//   • One-click "start campaign" that bulk-creates a touch task for every
+//     active-policy client, due-dated across the first 6 weeks of OEP.
+//   • Progress card showing how many OEP tasks are open vs. completed.
+
+function getOEPSeason() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const oneDay = 24 * 60 * 60 * 1000;
+  const yr = today.getFullYear();
+  // OEP for plan year (Y+1) runs Nov 1 of year Y through Jan 15 of year Y+1.
+  // We may currently be inside last year's OEP (i.e. Jan 1–15 of this year)
+  // OR this year's OEP (Nov 1–Dec 31 of this year). Check both.
+  const candidates = [
+    { startY: yr - 1, endY: yr },     // last calendar OEP
+    { startY: yr, endY: yr + 1 }      // this calendar OEP
+  ];
+  for (const c of candidates) {
+    const start = new Date(c.startY, 10, 1); // Nov 1
+    const end = new Date(c.endY, 0, 15);     // Jan 15
+    if (today >= start && today <= end) {
+      return {
+        phase: 'active',
+        startDate: start, endDate: end,
+        daysRemaining: Math.ceil((end - today) / oneDay),
+        cycleStartYear: c.startY, planYear: c.endY,
+        label: `OEP ${c.startY}-${String(c.endY).slice(2)}`,
+        tagPrefix: `[OEP ${c.startY}-${String(c.endY).slice(2)}]`
+      };
+    }
+  }
+  // Not active — return the next upcoming OEP.
+  const nextStart = new Date(yr, 10, 1); // Nov 1 this year
+  const nextEnd = new Date(yr + 1, 0, 15);
+  const daysUntilStart = Math.ceil((nextStart - today) / oneDay);
+  return {
+    phase: 'pre',
+    startDate: nextStart, endDate: nextEnd,
+    daysUntilStart,
+    cycleStartYear: yr, planYear: yr + 1,
+    label: `OEP ${yr}-${String(yr + 1).slice(2)}`,
+    tagPrefix: `[OEP ${yr}-${String(yr + 1).slice(2)}]`
+  };
+}
+
+// Render an OEP banner. Shown on the Dashboard when:
+//   • OEP is active (always shown, urgent), OR
+//   • OEP starts within 30 days (countdown).
+function renderOEPBanner() {
+  const oep = getOEPSeason();
+  if (oep.phase === 'pre' && oep.daysUntilStart > 30) return ''; // too far out
+  if (oep.phase === 'active') {
+    const urgency = oep.daysRemaining <= 7 ? 'var(--error)' : 'var(--yellow)';
+    return `
+      <div style="background:linear-gradient(135deg,rgba(253,199,47,0.12),rgba(253,199,47,0.04));border:1px solid rgba(253,199,47,0.4);border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="font-size:24px">🔥</div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:14px;color:var(--white);font-weight:600">${oep.label} is OPEN — ${oep.daysRemaining} day${oep.daysRemaining === 1 ? '' : 's'} remaining</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Final enrollment deadline: ${oep.endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+        </div>
+        <button class="btn-primary" style="width:auto;padding:8px 16px;margin-top:0;color:${urgency === 'var(--error)' ? '#fff' : ''};background:${urgency}" onclick="startOEPCampaign()">Start campaign</button>
+      </div>`;
+  }
+  // 'pre' phase
+  return `
+    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="font-size:24px;opacity:0.7">⏳</div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:14px;color:var(--white);font-weight:600">${oep.label} starts in ${oep.daysUntilStart} day${oep.daysUntilStart === 1 ? '' : 's'}</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Pre-load your campaign now so you're not scrambling Nov 1.</div>
+      </div>
+      <button class="btn-ghost" style="width:auto;padding:8px 16px;margin-top:0" onclick="startOEPCampaign()">Pre-create tasks</button>
+    </div>`;
+}
+
+// Render the OEP progress card (used inside the Renewals tab during OEP).
+function renderOEPProgressCard() {
+  const oep = getOEPSeason();
+  if (oep.phase === 'pre' && oep.daysUntilStart > 30) return '';
+  // Find OEP tasks in this cycle.
+  const oepTasks = crmTasks.filter(t => t.title && t.title.startsWith(oep.tagPrefix));
+  if (!oepTasks.length) return '';
+  const total = oepTasks.length;
+  const done = oepTasks.filter(t => t.completed).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:10px;display:flex;align-items:center;gap:10px">
+        <span>${oep.label} Campaign Progress</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;background:rgba(253,199,47,0.08);border:1px solid rgba(253,199,47,0.2);padding:2px 8px;border-radius:10px">${done}/${total} (${pct}%)</span>
+      </div>
+      <div style="height:10px;background:rgba(255,255,255,0.04);border-radius:5px;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--yellow),var(--success));border-radius:5px;transition:width 0.3s"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <span>${total - done} touch task${total - done === 1 ? '' : 's'} still open</span>
+        <span><a href="javascript:void(0)" onclick="showCRMTab('tasks')" style="color:var(--yellow);text-decoration:none">View in Tasks →</a></span>
+      </div>
+    </div>`;
+}
+
+// Bulk-create OEP touch tasks. Idempotent — skips clients who already have an
+// open task with the OEP tag prefix for this cycle.
+async function startOEPCampaign() {
+  const oep = getOEPSeason();
+  // Active-policy clients are the priority audience.
+  const activeClientIds = new Set();
+  for (const p of (crmPolicies || [])) {
+    if (p.status && p.status !== 'active') continue;
+    if (p.contact_id) activeClientIds.add(p.contact_id);
+  }
+  const clients = [...activeClientIds].map(id => crmContacts.find(c => c.id === id)).filter(Boolean);
+  if (!clients.length) {
+    showToast('No active-policy clients found. Add policies first.', 'error');
+    return;
+  }
+  const okConfirm = await showConfirm({
+    title: `Start ${oep.label} campaign?`,
+    sub: `${clients.length} active client${clients.length === 1 ? '' : 's'}`,
+    body: `This creates one touch task per client, due-dated across the first 6 weeks of OEP so the workload is spread out. Already-existing OEP tasks for this cycle are skipped — safe to re-run.`,
+    okText: 'Yes, start campaign'
+  });
+  if (!okConfirm) return;
+
+  // Spread due dates across the first 6 weeks of the OEP window.
+  const weeksToSpread = 6;
+  const startMs = oep.startDate.getTime();
+  const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+  let created = 0, skipped = 0;
+  for (let i = 0; i < clients.length; i++) {
+    const c = clients[i];
+    const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || 'client';
+    const title = `${oep.tagPrefix} Touch base — ${name}`;
+    const already = crmTasks.some(t => !t.completed && t.title === title);
+    if (already) { skipped++; continue; }
+    // Spread evenly across weeks 0–5.
+    const weekOffset = Math.floor((i / clients.length) * weeksToSpread);
+    const dueMs = startMs + (weekOffset * oneWeekMs);
+    const dueDate = new Date(dueMs);
+    // If we're already past that date (e.g. starting OEP late), clamp to today.
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dueIso = dueDate < today ? toLocalISODate(today) : toLocalISODate(dueDate);
+    const ok = await insertAutoTask({
+      title,
+      due_date: dueIso,
+      contact_id: c.id,
+      priority: 'high',
+      description: `OEP outreach for ${oep.label}.\nGoals: (1) confirm renewal intent, (2) re-shop if their situation changed, (3) ensure enrolled by ${oep.endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.\n\nQuick template: open the Deal Detail for this contact and click "Use template" → "Renewal reminder" to draft a Gmail message.`
+    });
+    if (ok) created++;
+  }
+  // Refresh data + UI.
+  crmTasks = await safeTableSelect('tasks', q => q.order('due_date', { ascending: true }));
+  if (crmActiveTab === 'renewals') renderCRMRenewals();
+  else if (crmActiveTab === 'dashboard') renderCRMDashboard();
+  else if (crmActiveTab === 'tasks') renderCRMTasks();
+  updateCRMTaskBadge();
+  const msg = skipped
+    ? `${oep.label} campaign — ${created} new task${created === 1 ? '' : 's'}, ${skipped} skipped (already existed)`
+    : `${oep.label} campaign started — ${created} task${created === 1 ? '' : 's'} created`;
+  showToast(msg, 'success');
+}
+
+// ---------- DATA QUALITY (Tier 4) ----------
+// Surfaces records that have missing fields, stale activity, or legacy data.
+// Each issue category is one-click-to-fix: row click opens the relevant edit
+// modal so Emanuel can patch and move on.
+//
+// Design goal: data quality compounds. Better DOBs → better birthday tasks;
+// better lead sources → better source ROI; better emails → templates work.
+// Even a small "needs attention" badge nudges the broker into hygiene mode.
+
+const LEGACY_LEAD_SOURCES = new Set([
+  'Google / Web search',
+  'Cold call / outreach',
+  'Walk-in'
+]);
+
+function getDataQualityIssues() {
+  const issues = {
+    missingEmail: [],
+    missingPhone: [],
+    missingDOB: [],
+    missingZIP: [],
+    legacyLeadSource: [],
+    staleDeals: [],
+    policiesNoCommission: [],
+    activeNoRenewal: []
+  };
+  const now = new Date(); now.setHours(0,0,0,0);
+  const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
+  const wonStageIds = new Set(crmStages.filter(s => s.is_won).map(s => s.id));
+  const lostStageIds = new Set(crmStages.filter(s => s.is_lost).map(s => s.id));
+  // Active-deal contacts only (skip dormant client records for missing-field flags
+  // since old clients sometimes legitimately don't have full data).
+  const activeContactIds = new Set();
+  for (const d of crmDeals) {
+    if (!wonStageIds.has(d.stage_id) && !lostStageIds.has(d.stage_id) && d.contact_id) {
+      activeContactIds.add(d.contact_id);
+    }
+  }
+  for (const c of crmContacts) {
+    const isActive = activeContactIds.has(c.id);
+    if (isActive && !c.email) issues.missingEmail.push(c);
+    if (isActive && !c.phone) issues.missingPhone.push(c);
+    if (isActive && !c.dob) issues.missingDOB.push(c);
+    if (isActive && !c.zip) issues.missingZIP.push(c);
+    if (c.lead_source && LEGACY_LEAD_SOURCES.has(c.lead_source)) issues.legacyLeadSource.push(c);
+  }
+  // Stale deals = open deal with no activity in 30+ days
+  for (const d of crmDeals) {
+    if (wonStageIds.has(d.stage_id) || lostStageIds.has(d.stage_id)) continue;
+    const lastTouchISO = d.updated_at || d.created_at;
+    if (!lastTouchISO) continue;
+    const lastTouch = new Date(lastTouchISO);
+    if (lastTouch < thirtyDaysAgo) issues.staleDeals.push(d);
+  }
+  // Policies missing commission info
+  for (const p of (crmPolicies || [])) {
+    if (p.status && p.status !== 'active') continue;
+    if (!p.commission_type) issues.policiesNoCommission.push(p);
+    if (!p.renewal_date) issues.activeNoRenewal.push(p);
+  }
+  return issues;
+}
+
+function dataQualityTotalCount(issues) {
+  return Object.values(issues).reduce((sum, arr) => sum + arr.length, 0);
+}
+
+// Dashboard card. Returns '' if zero issues so the card auto-hides.
+function renderDataQualityCard() {
+  const issues = getDataQualityIssues();
+  const total = dataQualityTotalCount(issues);
+  if (total === 0) {
+    return `
+      <div class="card" style="margin-bottom:0;border-color:rgba(61,191,138,0.3)">
+        <div class="card-title" style="margin-bottom:6px">✅ Data quality</div>
+        <div style="font-size:12.5px;color:var(--success)">All clear — no missing fields or stale records.</div>
+      </div>`;
+  }
+  const rows = [
+    { key: 'missingEmail',          label: 'Active contacts missing email',  count: issues.missingEmail.length },
+    { key: 'missingPhone',          label: 'Active contacts missing phone',  count: issues.missingPhone.length },
+    { key: 'missingDOB',            label: 'Active contacts missing DOB',    count: issues.missingDOB.length },
+    { key: 'missingZIP',            label: 'Active contacts missing ZIP',    count: issues.missingZIP.length },
+    { key: 'legacyLeadSource',      label: 'Contacts using legacy lead-source labels', count: issues.legacyLeadSource.length },
+    { key: 'staleDeals',            label: 'Open deals with no activity 30+ days', count: issues.staleDeals.length },
+    { key: 'policiesNoCommission',  label: 'Active policies missing commission info', count: issues.policiesNoCommission.length },
+    { key: 'activeNoRenewal',       label: 'Active policies missing renewal date',     count: issues.activeNoRenewal.length }
+  ].filter(r => r.count > 0);
+
+  const rowHTML = rows.map(r => `
+    <div onclick="openDataQualityModal('${r.key}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer">
+      <span style="font-size:12.5px;color:var(--text)">${escapeHTML(r.label)}</span>
+      <span style="font-size:11.5px;color:var(--yellow);background:rgba(253,199,47,0.08);border:1px solid rgba(253,199,47,0.25);padding:1px 8px;border-radius:9px;font-weight:600">${r.count}</span>
+    </div>`).join('');
+
+  return `
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title" style="margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        <span>⚠ Needs attention</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400">${total} item${total === 1 ? '' : 's'}</span>
+      </div>
+      ${rowHTML}
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">Click any row to drill in and fix.</div>
+    </div>`;
+}
+
+// Modal that lists records for a specific issue category. Each row is
+// click-to-open into the relevant edit flow.
+function openDataQualityModal(issueKey) {
+  const issues = getDataQualityIssues();
+  const records = issues[issueKey] || [];
+  const titleMap = {
+    missingEmail: 'Contacts missing email',
+    missingPhone: 'Contacts missing phone',
+    missingDOB: 'Contacts missing DOB',
+    missingZIP: 'Contacts missing ZIP',
+    legacyLeadSource: 'Contacts with legacy lead-source labels',
+    staleDeals: 'Open deals with no activity 30+ days',
+    policiesNoCommission: 'Active policies missing commission info',
+    activeNoRenewal: 'Active policies missing renewal date'
+  };
+  const helpMap = {
+    missingEmail: 'Without an email, you can\'t use templates or Gmail sync for this client.',
+    missingPhone: 'Phone is required for SMS and most outreach.',
+    missingDOB: 'No DOB → no birthday auto-task and no age-band insights.',
+    missingZIP: 'ZIP is needed to re-quote at renewal.',
+    legacyLeadSource: 'These contacts use lead-source labels we renamed. Pick the new vendor or "Other".',
+    staleDeals: 'Open deals with no recent activity tend to die. Re-engage or move to Lost.',
+    policiesNoCommission: 'Without commission info, the Commissions tab and Reports won\'t reflect this policy.',
+    activeNoRenewal: 'Without a renewal date, the auto-renewal scanner can\'t schedule outreach.'
+  };
+
+  // Build per-record rows. Click jumps to the right edit context.
+  let rowsHTML = '';
+  if (issueKey.startsWith('missing') || issueKey === 'legacyLeadSource') {
+    // Contacts → open the most recent deal for that contact in Deal Detail.
+    rowsHTML = records.map(c => {
+      const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || 'Unnamed';
+      const meta = [c.email, c.phone, c.zip, c.lead_source ? `Source: ${c.lead_source}` : ''].filter(Boolean).join(' · ');
+      const deal = (crmDeals || [])
+        .filter(d => d.contact_id === c.id)
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+      const action = deal
+        ? `onclick="closeDataQualityModal();setTimeout(()=>openDealDetail('${deal.id}'),50)"`
+        : `onclick="showToast('No deal yet for this contact', 'error')"`;
+      return `
+        <div ${action} style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--white)">${escapeHTML(name)}</div>
+            ${meta ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHTML(meta)}</div>` : ''}
+          </div>
+          <div style="font-size:11px;color:var(--yellow)">Open →</div>
+        </div>`;
+    }).join('');
+  } else if (issueKey === 'staleDeals') {
+    rowsHTML = records.map(d => {
+      const c = crmContacts.find(cc => cc.id === d.contact_id);
+      const label = crmContactLabel(d);
+      const lastTouch = d.updated_at || d.created_at;
+      const daysAgo = lastTouch ? Math.floor((Date.now() - new Date(lastTouch).getTime()) / (24*60*60*1000)) : '?';
+      return `
+        <div onclick="closeDataQualityModal();setTimeout(()=>openDealDetail('${d.id}'),50)" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--white)">${escapeHTML(label)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">No activity for ${daysAgo} day${daysAgo === 1 ? '' : 's'}</div>
+          </div>
+          <div style="font-size:11px;color:var(--yellow)">Open →</div>
+        </div>`;
+    }).join('');
+  } else if (issueKey === 'policiesNoCommission' || issueKey === 'activeNoRenewal') {
+    rowsHTML = records.map(p => {
+      const c = crmContacts.find(cc => cc.id === p.contact_id);
+      const name = c ? ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || 'client') : 'unknown';
+      const meta = [p.carrier, p.plan_name].filter(Boolean).join(' · ') || 'no carrier on file';
+      return `
+        <div onclick="closeDataQualityModal();setTimeout(()=>openPolicyModal('${p.contact_id}','${p.id}'),50)" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--white)">${escapeHTML(name)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHTML(meta)}</div>
+          </div>
+          <div style="font-size:11px;color:var(--yellow)">Open →</div>
+        </div>`;
+    }).join('');
+  }
+
+  if (!rowsHTML) {
+    rowsHTML = '<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:30px 10px">All clear in this category 🎉</div>';
+  }
+
+  // Build (or reuse) the modal element.
+  let m = document.getElementById('dataQualityModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'dataQualityModal';
+    m.className = 'modal-overlay';
+    m.style.zIndex = '200';
+    document.body.appendChild(m);
+  }
+  m.style.display = 'flex';
+  m.innerHTML = `
+    <div class="modal" style="max-width:600px">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">${escapeHTML(titleMap[issueKey] || 'Data quality')}</div>
+          <div class="modal-sub">${escapeHTML(helpMap[issueKey] || '')}</div>
+        </div>
+        <button class="modal-close" onclick="closeDataQualityModal()">×</button>
+      </div>
+      <div class="modal-body">
+        ${rowsHTML}
+      </div>
+      <div class="modal-footer">
+        <div style="flex:1;font-size:11px;color:var(--muted)">${records.length} record${records.length === 1 ? '' : 's'}</div>
+        <button class="btn-primary" style="width:auto;padding:10px 20px;margin-top:0" onclick="closeDataQualityModal()">Done</button>
+      </div>
+    </div>`;
+}
+function closeDataQualityModal() {
+  const m = document.getElementById('dataQualityModal');
+  if (m) m.style.display = 'none';
 }
 
 // ------- Deal-scoped renderers for Tier 1 features -------
@@ -4916,13 +5429,14 @@ function renderPoliciesForContact(contactId) {
 
 function showCRMTab(tab) {
   crmActiveTab = tab;
-  const tabs = ['dashboard','pipelines','tasks','renewals','commissions'];
+  const tabs = ['dashboard','pipelines','tasks','renewals','commissions','reports'];
   const btnIds = {
     dashboard:'crmTabDashboard',
     pipelines:'crmTabPipelines',
     tasks:'crmTabTasks',
     renewals:'crmTabRenewals',
-    commissions:'crmTabCommissions'
+    commissions:'crmTabCommissions',
+    reports:'crmTabReports'
   };
   tabs.forEach(t => {
     const el = document.getElementById(btnIds[t]);
@@ -4938,6 +5452,7 @@ function showCRMTab(tab) {
     else if (tab === 'tasks') renderCRMTasks();
     else if (tab === 'renewals') renderCRMRenewals();
     else if (tab === 'commissions') renderCRMCommissions();
+    else if (tab === 'reports') renderCRMReports();
     else renderCRMPipelines();
     updateCRMTaskBadge();
     updateCRMRenewalBadge();
@@ -4986,6 +5501,7 @@ function renderCRMDashboard() {
 
   body.innerHTML = `
     <div style="padding:20px">
+      ${renderOEPBanner()}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px">
         <div class="card" style="margin-bottom:0;cursor:pointer" onclick="showCRMTab('tasks')">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Overdue Tasks</div>
@@ -5040,6 +5556,9 @@ function renderCRMDashboard() {
           <div class="card-title" style="margin-bottom:12px">🎂 Birthdays this month</div>
           ${renderBirthdaysThisMonth()}
         </div>
+      </div>
+      <div style="margin-top:14px">
+        ${renderDataQualityCard()}
       </div>
     </div>`;
 }
@@ -5124,6 +5643,8 @@ document.addEventListener('click', (e) => {
   if (e.target && e.target.id === 'crmChangePasswordModal') closeCRMChangePassword();
   if (e.target && e.target.id === 'crmImportModal')   closeCRMImport();
   if (e.target && e.target.id === 'emailTplModal')    closeEmailTemplates();
+  if (e.target && e.target.id === 'crmSettingsModalV2') closeSettingsModalV2();
+  if (e.target && e.target.id === 'dataQualityModal') closeDataQualityModal();
 });
 
 // Boot the client on page load (no auth side effects if not signed in)
@@ -5640,8 +6161,8 @@ function openDealDetail(dealId) {
           <div class="field" style="margin-bottom:0"><label class="label">Lead Source</label>
             <select class="input" id="dd_lead_source">
               <option value="">—</option>
-              ${['Referral - existing client','Referral - other','Facebook Ad','Google / Web search','Cold call / outreach','Networking event','Walk-in','Other'].map(s => `<option value="${escapeHTML(s)}"${(contact.lead_source||'')===s?' selected':''}>${escapeHTML(s)}</option>`).join('')}
-              ${contact.lead_source && !['Referral - existing client','Referral - other','Facebook Ad','Google / Web search','Cold call / outreach','Networking event','Walk-in','Other'].includes(contact.lead_source) ? `<option value="${escapeHTML(contact.lead_source)}" selected>${escapeHTML(contact.lead_source)}</option>` : ''}
+              ${(window.LEAD_SOURCE_OPTIONS || ['Referral - existing client','Referral - other','Facebook Ad','Next Gen Lead','Next Gen ER','VSoft Lead','Tusha Lead','Networking event','Other']).map(s => `<option value="${escapeHTML(s)}"${(contact.lead_source||'')===s?' selected':''}>${escapeHTML(s)}</option>`).join('')}
+              ${contact.lead_source && !(window.LEAD_SOURCE_OPTIONS || ['Referral - existing client','Referral - other','Facebook Ad','Next Gen Lead','Next Gen ER','VSoft Lead','Tusha Lead','Networking event','Other']).includes(contact.lead_source) ? `<option value="${escapeHTML(contact.lead_source)}" selected>${escapeHTML(contact.lead_source)}</option>` : ''}
             </select>
           </div>
         </div>
@@ -5650,6 +6171,7 @@ function openDealDetail(dealId) {
         <textarea class="input" id="dd_notes" rows="5" placeholder="Leave any notes for this lead — call outcomes, follow-up reminders, preferences, quoted plans, objections…" style="resize:vertical;min-height:100px;font-family:inherit;line-height:1.5;padding:10px 12px">${escapeHTML(qd.notes || '')}</textarea>
         <div style="font-size:11px;color:var(--muted);margin-top:4px" id="dd_notes_meta">${qd.notes_updated_at ? 'Last updated ' + formatDealDate(qd.notes_updated_at) : 'Tip: click Save Changes to persist your notes.'}</div>
       `)}
+      ${section('Quote History', renderQuoteHistoryForContact(deal.contact_id, deal.id))}
       ${section('Attachments', renderAttachmentsForDeal(deal))}
       ${section('Send Email', `
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -6420,9 +6942,15 @@ function openPolicyModal(contactId, policyId) {
   document.getElementById('pol_commission_flat_amount').value  = policy && policy.commission_flat_amount != null ? policy.commission_flat_amount : '';
   document.getElementById('pol_term_months').value             = policy && policy.policy_term_months != null ? policy.policy_term_months : '';
   document.getElementById('pol_chargeback_months').value       = policy && policy.chargeback_months != null ? policy.chargeback_months : '';
+  // USHA rate-book fields (Tier 4)
+  populateUSHAProductDropdown();
+  document.getElementById('pol_usha_product').value   = policy && policy.commission_product ? policy.commission_product : '';
+  document.getElementById('pol_coverage_level').value = policy && policy.coverage_level ? policy.coverage_level : '';
+  document.getElementById('pol_state').value          = policy && policy.state ? policy.state : '';
   // Open the commission section if the policy already has commission set
-  document.getElementById('pol_commission_section').open = !!(policy && policy.commission_type);
+  document.getElementById('pol_commission_section').open = !!(policy && (policy.commission_type || policy.commission_product));
   onCommissionTypeChange();
+  onUSHAProductChange();
   document.getElementById('policyDeleteBtn').style.display = policy ? 'inline-block' : 'none';
   document.getElementById('pol_error').style.display = 'none';
   document.getElementById('policyModal').style.display = 'flex';
@@ -6449,8 +6977,39 @@ function onCommissionTypeChange() {
 
 function updateCommissionPreview() {
   const preview = document.getElementById('pol_commission_preview');
-  const type = document.getElementById('pol_commission_type').value;
+  const ushaProduct = (document.getElementById('pol_usha_product') || { value: '' }).value;
   const premium = parseFloat(document.getElementById('pol_premium').value) || 0;
+
+  // USHA path takes priority — show first-year + 10-year breakdown.
+  if (ushaProduct) {
+    const calc = calculateUSHACommission({
+      productId: ushaProduct,
+      state: (document.getElementById('pol_state') || { value: '' }).value,
+      coverageLevel: (document.getElementById('pol_coverage_level') || { value: '' }).value,
+      monthlyPremium: premium,
+      policyStartIso: document.getElementById('pol_eff').value || null,
+      isExchangeOrRewrite: false
+    });
+    if (!calc) { preview.style.display = 'none'; return; }
+    const fmt = n => '$' + Number(n || 0).toFixed(2);
+    const breakdownRows = calc.breakdown.slice(0, 5).map(b =>
+      `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>Year ${b.year}</span><span>${(b.rate*100).toFixed(2)}% → ${fmt(b.monthly)}/mo · ${fmt(b.annual)}/yr</span></div>`
+    ).join('');
+    preview.style.display = 'block';
+    preview.innerHTML = `
+      <div style="font-size:13px;color:var(--yellow);font-weight:600;margin-bottom:6px">${escapeHTML(calc.productName)}</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:6px">Commissionable premium: ${fmt(calc.commissionablePremium)}/mo (after ${fmt(calc.totalPremium - calc.commissionablePremium)} non-comm fee)</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:6px">Year 1: <strong>${fmt(calc.firstYearMonthly)}/mo</strong> · ${fmt(calc.firstYearAnnual)}/yr</div>
+      <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">First 5 years</div>
+        ${breakdownRows}
+        <div style="font-size:11.5px;color:var(--success);font-weight:600;margin-top:6px">10-year lifetime: ${fmt(calc.lifetimeTotal)}</div>
+      </div>`;
+    return;
+  }
+
+  // Manual path (original logic)
+  const type = document.getElementById('pol_commission_type').value;
   const rate = parseFloat(document.getElementById('pol_commission_rate').value) || 0;
   const flat = parseFloat(document.getElementById('pol_commission_flat_amount').value) || 0;
   const term = parseInt(document.getElementById('pol_term_months').value) || 12;
@@ -6465,6 +7024,36 @@ function updateCommissionPreview() {
   preview.style.display = 'block';
   preview.innerHTML = `<span style="color:var(--yellow);font-weight:600">Estimated commission:</span> ${est.description}`;
 }
+
+// Populate the USHA product dropdown once on policy modal open.
+function populateUSHAProductDropdown() {
+  const sel = document.getElementById('pol_usha_product');
+  if (!sel || sel.dataset.populated === '1') return;
+  sel.dataset.populated = '1';
+  for (const prod of USHA_PRODUCTS) {
+    const opt = document.createElement('option');
+    opt.value = prod.id;
+    opt.textContent = prod.name;
+    sel.appendChild(opt);
+  }
+}
+
+// When the USHA product changes, refresh the live preview and dim the manual fields.
+function onUSHAProductChange() {
+  const ushaProduct = (document.getElementById('pol_usha_product') || { value: '' }).value;
+  const manualFields = ['pol_commission_type','pol_commission_rate','pol_commission_flat_amount'];
+  manualFields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.opacity = ushaProduct ? '0.5' : '';
+  });
+  updateCommissionPreview();
+}
+
+// Live re-calc when key inputs change.
+['pol_premium','pol_eff','pol_coverage_level','pol_state'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateCommissionPreview);
+});
 
 function closePolicyModal() {
   document.getElementById('policyModal').style.display = 'none';
@@ -6494,7 +7083,13 @@ async function savePolicyFromModal() {
     commission_rate: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_commission_rate').value.trim()),
     commission_flat_amount: (v => v === '' ? null : (isNaN(Number(v)) ? null : Number(v)))(document.getElementById('pol_commission_flat_amount').value.trim()),
     policy_term_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_term_months').value.trim()),
-    chargeback_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_chargeback_months').value.trim())
+    chargeback_months: (v => v === '' ? null : (isNaN(parseInt(v)) ? null : parseInt(v)))(document.getElementById('pol_chargeback_months').value.trim()),
+    // Tier 4 — USHA rate-book fields. When commission_product is set, the
+    // estimateCommission helper derives values from USHA_PRODUCTS instead of
+    // the manual commission_type/rate fields above.
+    commission_product: document.getElementById('pol_usha_product').value || null,
+    coverage_level: document.getElementById('pol_coverage_level').value || null,
+    state: (document.getElementById('pol_state').value || '').trim().toUpperCase() || null
   };
   const saveBtn = document.getElementById('policySaveBtn');
   saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
@@ -6548,7 +7143,314 @@ document.addEventListener('keydown', (e) => {
 
 // ---------- COMMISSION HELPERS ----------
 // Returns { monthly, total, description } for a policy based on its commission settings.
+// ---------- USHA COMMISSION RATE BOOK (Tier 4) ----------
+// Source: USHEALTH Advisors Exhibit I Commission Schedule, effective
+// April 24, 2026 (file in this folder: USHAdvisors Comm Schedules 4-24-2026 - WA.pdf).
+// Rates expressed as decimals (0.5700 = 57%). All renewal rates are BASE
+// (bonus renewals depend on the agent agreement and aren't auto-applied).
+// Variants apply by state — the calculator picks the right one based on
+// `policy.state`. If state is unset, the default variant is used.
+//
+// Non-commissionable monthly fees are subtracted from premium BEFORE the
+// rate is applied, per the schedule's footnotes. For products where the
+// fee depends on coverage level (Single / Couple / Family), `policy.coverage_level`
+// drives the right value.
+
+const USHA_PRODUCTS = [
+  // ---- Single-block renewals (Y2-10 same rate) ----
+  {
+    id: 'usha:medguard_ci',
+    name: 'MedGuard Critical Illness',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.7500,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0560, bonus: 0.0240 }],
+        nonCommFeeMonthly: 0
+      }
+    ]
+  },
+  {
+    id: 'usha:accident_protector',
+    name: 'Accident Protector',
+    variants: [
+      { stateRule: 'default',
+        excludeStates: ['AL','DE','GA','IN','KS','KY','LA','MD','MO','MS','NC','NV','OH','TN','UT','WV','WY','CO','SD'],
+        firstYear: 0.5700,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0490, bonus: 0.0210 }],
+        nonCommFeeByCoverage: { Single: 9.95, Couple: 12.95, Family: 16.95 }
+      },
+      { stateRule: 'states',
+        states: ['AL','DE','GA','IN','KS','KY','LA','MD','MO','MS','NC','NV','OH','TN','UT','WV','WY'],
+        firstYear: 0.5700,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
+        nonCommFeeByCoverage: { Single: 9.95, Couple: 12.95, Family: 16.95 }
+      },
+      { stateRule: 'states',
+        states: ['CO','SD'],
+        firstYear: 0.4300,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
+        // CO has its own non-commissionable fee schedule.
+        nonCommFeeByCoverage: { Single: 9.05, Couple: 11.85, Family: 16.30 }
+      }
+    ]
+  },
+  {
+    id: 'usha:income_protector',
+    name: 'Income Protector',
+    variants: [
+      { stateRule: 'default',
+        excludeStates: ['CO','DE','IN','KS','OH','UT','WV'],
+        firstYear: 0.5700,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
+        nonCommFeeMonthly: 0
+      },
+      { stateRule: 'states',
+        states: ['CO','DE','IN','KS','OH','UT','WV'],
+        firstYear: 0.4200,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
+        nonCommFeeMonthly: 0
+      }
+    ]
+  },
+  {
+    id: 'usha:premier_vision',
+    name: 'PremierVision',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.3800,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0140, bonus: 0.0060 }],
+        nonCommFeeMonthly: 0
+      }
+    ]
+  },
+  {
+    id: 'usha:dental',
+    name: 'Dental & SecureDental',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.1800,
+        renewalSchedule: [{ y1: 2, y2: 10, base: 0.0070, bonus: 0.0030 }],
+        nonCommFeeMonthly: 0
+      }
+    ]
+  },
+  // ---- Two-tier renewals (Y2 separate from Y3-10) ----
+  {
+    id: 'usha:health_access',
+    name: 'HealthAccess Suite of Products',
+    variants: [
+      { stateRule: 'default',
+        excludeStates: ['CO','MD','SD'],
+        firstYear: 0.1600,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0245, bonus: 0.0105 },
+          { y1: 3, y2: 10, base: 0.0245, bonus: 0.0105 }
+        ],
+        nonCommFeeMonthly: 0
+      },
+      { stateRule: 'states',
+        states: ['CO','MD','SD'],
+        firstYear: 0.1250,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0245, bonus: 0.0105 },
+          { y1: 3, y2: 10, base: 0.0245, bonus: 0.0105 }
+        ],
+        nonCommFeeMonthly: 0
+      }
+    ]
+  },
+  {
+    id: 'usha:premier_choice_saw',
+    name: 'PremierChoice — Sickness, Accident & Wellness',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.2000,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0420, bonus: 0.0180 },
+          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 }
+        ],
+        nonCommFeeMonthly: 0
+      }
+    ]
+  },
+  {
+    id: 'usha:secure_advantage_conversion',
+    name: 'SecureAdvantage Conversion Plans',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.0200,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0140, bonus: 0.0060 },
+          { y1: 3, y2: 10, base: 0.0140, bonus: 0.0060 }
+        ],
+        // SA Conversion Sickness/Accident: $10/mo non-comm policy fee.
+        // SA Conversion Accident-only: $30/mo. We default to $10; user can
+        // override on the policy modal if it's accident-only.
+        nonCommFeeMonthly: 10.00
+      }
+    ]
+  },
+  {
+    id: 'usha:secure_advantage_saw',
+    name: 'SecureAdvantage — Sickness, Accident & Wellness',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.2100,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0280, bonus: 0.0120 },
+          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 }
+        ],
+        nonCommFeeMonthly: 10.00 // $10/mo non-commissionable policy fee
+      }
+    ]
+  },
+  {
+    id: 'usha:premier_advantage',
+    name: 'PremierAdvantage',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.2000,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0420, bonus: 0.0180 },
+          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 }
+        ],
+        nonCommFeeMonthly: 0
+      }
+    ]
+  },
+  {
+    id: 'usha:life_protector_ii',
+    name: 'Life Protector II',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.7500,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0560, bonus: 0.0240 },
+          { y1: 3, y2: 10, base: 0.0560, bonus: 0.0240 }
+        ],
+        nonCommFeeMonthly: 2.12 // built into premium
+      }
+    ]
+  }
+];
+
+// Pick the right variant for a product based on the policy's state.
+function pickUSHAVariant(product, state) {
+  if (!product || !product.variants) return null;
+  const upState = (state || '').toUpperCase();
+  if (upState) {
+    // First, look for an explicit state match.
+    const stateVariant = product.variants.find(v => v.stateRule === 'states' && (v.states || []).includes(upState));
+    if (stateVariant) return stateVariant;
+  }
+  // Fall back to default — but skip if state is in its excludeStates.
+  return product.variants.find(v => {
+    if (v.stateRule !== 'default') return false;
+    if (v.excludeStates && upState && v.excludeStates.includes(upState)) return false;
+    return true;
+  }) || product.variants[0];
+}
+
+// Compute commissionable premium = total premium − non-commissionable fee.
+function ushaCommissionableMonthly(variant, totalMonthlyPremium, coverageLevel) {
+  const total = Number(totalMonthlyPremium) || 0;
+  let fee = 0;
+  if (variant.nonCommFeeMonthly != null) fee = Number(variant.nonCommFeeMonthly) || 0;
+  if (variant.nonCommFeeByCoverage && coverageLevel && variant.nonCommFeeByCoverage[coverageLevel] != null) {
+    fee = Number(variant.nonCommFeeByCoverage[coverageLevel]) || 0;
+  }
+  return Math.max(0, total - fee);
+}
+
+// Pick the renewal-schedule entry that covers a given policy year (1-indexed).
+function pickRenewalEntry(variant, policyYear) {
+  if (!variant.renewalSchedule || !variant.renewalSchedule.length) return null;
+  return variant.renewalSchedule.find(r => policyYear >= r.y1 && policyYear <= r.y2) || null;
+}
+
+// Calculate first-year + each renewal year's commission for a USHA policy.
+// Returns { firstYearMonthly, currentYearMonthly, currentYearLabel, lifetimeTotal, breakdown }
+// where breakdown is per-year.
+function calculateUSHACommission({ productId, state, coverageLevel, monthlyPremium, policyStartIso, isExchangeOrRewrite }) {
+  const product = USHA_PRODUCTS.find(p => p.id === productId);
+  if (!product) return null;
+  const variant = pickUSHAVariant(product, state);
+  if (!variant) return null;
+  const commPremium = ushaCommissionableMonthly(variant, monthlyPremium, coverageLevel);
+
+  // Year 1 — first-year rate (or year-3 rate if it's an exchange/rewrite per note 10).
+  let firstYearRate = variant.firstYear;
+  if (isExchangeOrRewrite) {
+    const y3Entry = pickRenewalEntry(variant, 3);
+    if (y3Entry) firstYearRate = y3Entry.base;
+  }
+  const firstYearMonthly = commPremium * firstYearRate;
+
+  // Determine current policy year from start date.
+  let currentYear = 1;
+  if (policyStartIso) {
+    const start = parseLocalDate(policyStartIso) || new Date(policyStartIso);
+    if (start && !isNaN(start.getTime())) {
+      const today = new Date();
+      currentYear = Math.max(1, Math.floor((today - start) / (365.25 * 24 * 60 * 60 * 1000)) + 1);
+    }
+  }
+
+  // Current monthly commission (based on which year we're in).
+  let currentYearMonthly = 0;
+  let currentYearLabel = `Year ${currentYear}`;
+  if (currentYear === 1) {
+    currentYearMonthly = firstYearMonthly;
+    currentYearLabel = 'Year 1 (first year)';
+  } else {
+    const r = pickRenewalEntry(variant, currentYear);
+    if (r) currentYearMonthly = commPremium * r.base;
+    currentYearLabel = `Year ${currentYear} (renewal)`;
+  }
+
+  // Build a 10-year breakdown.
+  const breakdown = [];
+  for (let y = 1; y <= 10; y++) {
+    if (y === 1) {
+      breakdown.push({ year: y, rate: firstYearRate, monthly: firstYearMonthly, annual: firstYearMonthly * 12 });
+    } else {
+      const r = pickRenewalEntry(variant, y);
+      const m = r ? commPremium * r.base : 0;
+      breakdown.push({ year: y, rate: r ? r.base : 0, monthly: m, annual: m * 12 });
+    }
+  }
+  const lifetimeTotal = breakdown.reduce((sum, e) => sum + e.annual, 0);
+
+  return {
+    productId, productName: product.name,
+    variant, commissionablePremium: commPremium, totalPremium: Number(monthlyPremium) || 0,
+    firstYearMonthly, firstYearAnnual: firstYearMonthly * 12,
+    currentYear, currentYearMonthly, currentYearLabel,
+    lifetimeTotal, breakdown
+  };
+}
+
 function estimateCommission(p) {
+  // If a USHA product is set, compute via the rate book — overrides legacy fields.
+  if (p.commission_product && String(p.commission_product).startsWith('usha:')) {
+    const calc = calculateUSHACommission({
+      productId: p.commission_product,
+      state: p.state,
+      coverageLevel: p.coverage_level,
+      monthlyPremium: Number(p.monthly_premium) || 0,
+      policyStartIso: p.start_date,
+      isExchangeOrRewrite: !!p.is_exchange_or_rewrite
+    });
+    if (calc) {
+      const term = 12;
+      return {
+        monthly: calc.currentYearMonthly,
+        total: calc.currentYearMonthly * term,
+        description: `${calc.productName}: ${calc.currentYearLabel} → $${calc.currentYearMonthly.toFixed(2)}/mo on $${calc.commissionablePremium.toFixed(2)} commissionable premium`
+      };
+    }
+  }
+
   const term = p.policy_term_months || 12;
   const premium = Number(p.monthly_premium) || 0;
   const rate = Number(p.commission_rate) || 0;
@@ -6590,6 +7492,378 @@ function commissionLabel(type) {
   if (type === 'flat_monthly') return 'Flat $/mo';
   if (type === 'first_year_flat') return 'First-year flat';
   return '—';
+}
+
+// ---------- REPORTS TAB (Tier 4) ----------
+// All-time analytics view. Five blocks:
+//   1. Top KPI cards (YTD commission earned, MRR, active clients, conversion rate)
+//   2. Conversion funnel (Saved → Pushed to CRM → Quoted → Won) with rates
+//   3. MRR trend chart (last 12 months, inline SVG bars)
+//   4. Lead-source ROI table (sorted by MRR generated)
+//   5. Win rate by carrier table
+//
+// Uses only what's already in `crmContacts`, `crmDeals`, `crmStages`,
+// `crmPolicies`, plus the localStorage saved-leads array. No new APIs.
+
+function renderCRMReports() {
+  const body = document.getElementById('crmWorkspaceBody');
+
+  // ----- Helpers / data prep -----
+  const wonStageIds = new Set(crmStages.filter(s => s.is_won).map(s => s.id));
+  const lostStageIds = new Set(crmStages.filter(s => s.is_lost).map(s => s.id));
+  const wonDeals = crmDeals.filter(d => wonStageIds.has(d.stage_id));
+  const lostDeals = crmDeals.filter(d => lostStageIds.has(d.stage_id));
+  const closedDeals = wonDeals.length + lostDeals.length;
+  const winRate = closedDeals ? (wonDeals.length / closedDeals) : 0;
+  const activePolicies = (crmPolicies || []).filter(p => p.status === 'active' || !p.status);
+  const activeClientIds = new Set(activePolicies.map(p => p.contact_id).filter(Boolean));
+  const activeClients = activeClientIds.size;
+
+  // MRR (sum of monthly_premium across active policies)
+  let totalMRR = 0;
+  for (const p of activePolicies) {
+    if (p.monthly_premium != null && !isNaN(p.monthly_premium)) totalMRR += Number(p.monthly_premium);
+  }
+
+  // YTD commission — sum of monthly commission (estimateCommission) × months
+  // elapsed this year. Annualized = monthly × 12.
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const monthsElapsed = Math.max(1, (now.getMonth() + (now.getDate() / 30)));
+  let monthlyCommission = 0;
+  let annualizedFirstYear = 0;
+  for (const p of activePolicies) {
+    if (typeof estimateCommission !== 'function') break;
+    const est = estimateCommission(p);
+    if (est && est.monthly) monthlyCommission += est.monthly;
+    if (est && est.total && p.commission_type === 'first_year_flat') annualizedFirstYear += est.total;
+  }
+  const ytdCommission = (monthlyCommission * monthsElapsed) + annualizedFirstYear;
+  const annualizedCommission = (monthlyCommission * 12) + annualizedFirstYear;
+
+  // Saved leads — read straight from localStorage (source of truth for funnel).
+  // Use loadSavedLeads() if available so we share the same key (`savedLeads`).
+  let savedLeads = [];
+  try {
+    if (typeof loadSavedLeads === 'function') savedLeads = loadSavedLeads();
+    else savedLeads = JSON.parse(localStorage.getItem('savedLeads') || '[]');
+  } catch (_) { savedLeads = []; }
+  const pushedToCRM = savedLeads.filter(l => l.crmDealId).length;
+
+  // "Quoted" = deal with quote_data.acaMin set
+  const quotedDeals = crmDeals.filter(d => {
+    const qd = d.quote_data || {};
+    return qd.acaMin != null || qd.acaMax != null;
+  });
+
+  // Conversion rate = won / total deals
+  const conversionRate = crmDeals.length ? (wonDeals.length / crmDeals.length) : 0;
+
+  // ----- KPI cards row -----
+  const kpiCard = (label, value, sub, color = 'var(--yellow)') => `
+    <div class="card" style="margin-bottom:0">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">${label}</div>
+      <div style="font-size:26px;font-family:'Playfair Display',serif;color:${color};line-height:1.1">${value}</div>
+      ${sub ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${sub}</div>` : ''}
+    </div>`;
+  const fmtUSD = n => '$' + Math.round(n).toLocaleString();
+  const fmtPct = n => (n * 100).toFixed(1) + '%';
+
+  // ----- Conversion funnel -----
+  const funnelStages = [
+    { label: 'Saved Leads',   count: savedLeads.length },
+    { label: 'Pushed to CRM', count: pushedToCRM },
+    { label: 'Quoted',        count: quotedDeals.length },
+    { label: 'Won',           count: wonDeals.length }
+  ];
+  const top = funnelStages[0].count || 1;
+  const funnelHTML = funnelStages.map((s, i) => {
+    const pctOfTop = top ? (s.count / top) : 0;
+    const widthPct = Math.max(8, Math.round(pctOfTop * 100));
+    const dropoff = i > 0 && funnelStages[i-1].count > 0
+      ? ((s.count / funnelStages[i-1].count) * 100).toFixed(0) + '%'
+      : '';
+    const barColor = i === funnelStages.length - 1 ? 'var(--success)' : 'var(--yellow)';
+    return `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="width:120px;font-size:12px;color:var(--white)">${s.label}</div>
+        <div style="flex:1;height:28px;background:rgba(255,255,255,0.04);border-radius:6px;position:relative;overflow:hidden">
+          <div style="height:100%;width:${widthPct}%;background:${barColor};opacity:0.7;border-radius:6px"></div>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 10px;font-size:12px;color:var(--white);font-weight:600">
+            ${s.count}
+            ${dropoff ? `<span style="margin-left:auto;font-weight:400;color:rgba(255,255,255,0.7);font-size:11px">${dropoff} of prev</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // ----- MRR trend (last 12 months, inline SVG bars) -----
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      label: d.toLocaleDateString('en-US', { month: 'short' }) + (i === 0 ? '' : ''),
+      yearLabel: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      year: d.getFullYear(),
+      monthIndex: d.getMonth(),
+      mrr: 0
+    });
+  }
+  // For each month, sum monthly_premium of policies that were active that month.
+  for (const p of (crmPolicies || [])) {
+    if (p.monthly_premium == null || isNaN(p.monthly_premium)) continue;
+    const start = p.start_date ? parseLocalDate(p.start_date) : null;
+    const end = p.end_date ? parseLocalDate(p.end_date) : (p.renewal_date ? parseLocalDate(p.renewal_date) : null);
+    for (const m of months) {
+      const monthStart = new Date(m.year, m.monthIndex, 1);
+      const monthEnd = new Date(m.year, m.monthIndex + 1, 0);
+      const wasActive = (!start || start <= monthEnd) && (!end || end >= monthStart);
+      if (wasActive) m.mrr += Number(p.monthly_premium);
+    }
+  }
+  const maxMRR = Math.max(1, ...months.map(m => m.mrr));
+  const chartW = 720, chartH = 180, padL = 50, padR = 10, padT = 16, padB = 30;
+  const innerW = chartW - padL - padR;
+  const innerH = chartH - padT - padB;
+  const barW = innerW / months.length * 0.7;
+  const barGap = innerW / months.length * 0.3;
+  const bars = months.map((m, i) => {
+    const h = (m.mrr / maxMRR) * innerH;
+    const x = padL + (i * (barW + barGap));
+    const y = padT + (innerH - h);
+    return `<g>
+      <rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="var(--yellow)" opacity="0.7" rx="3"></rect>
+      <text x="${x + barW/2}" y="${chartH - 10}" text-anchor="middle" fill="var(--muted)" font-size="10" font-family="DM Sans">${m.yearLabel}</text>
+      ${m.mrr > 0 ? `<text x="${x + barW/2}" y="${y - 4}" text-anchor="middle" fill="var(--white)" font-size="9.5" font-family="DM Sans">$${(m.mrr/1000).toFixed(1)}k</text>` : ''}
+    </g>`;
+  }).join('');
+  // Y-axis gridlines / ticks
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(t => {
+    const y = padT + innerH - (t * innerH);
+    const val = (t * maxMRR);
+    return `<g>
+      <line x1="${padL}" y1="${y}" x2="${chartW - padR}" y2="${y}" stroke="var(--border)" stroke-dasharray="2,3" opacity="0.4"></line>
+      <text x="${padL - 6}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="9.5" font-family="DM Sans">$${val >= 1000 ? (val/1000).toFixed(0) + 'k' : Math.round(val)}</text>
+    </g>`;
+  }).join('');
+  const mrrChartSVG = `
+    <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">
+      ${yTicks}
+      ${bars}
+    </svg>`;
+
+  // ----- Lead source ROI table -----
+  // Group contacts by lead_source. For each: contact count, won deals, MRR generated.
+  const sourceMap = new Map();
+  for (const c of crmContacts) {
+    const src = c.lead_source || '— Unknown —';
+    if (!sourceMap.has(src)) sourceMap.set(src, { contacts: 0, won: 0, mrr: 0 });
+    sourceMap.get(src).contacts++;
+  }
+  for (const d of wonDeals) {
+    const c = crmContacts.find(cc => cc.id === d.contact_id);
+    if (!c) continue;
+    const src = c.lead_source || '— Unknown —';
+    if (sourceMap.has(src)) sourceMap.get(src).won++;
+  }
+  for (const p of activePolicies) {
+    if (p.monthly_premium == null) continue;
+    const c = crmContacts.find(cc => cc.id === p.contact_id);
+    if (!c) continue;
+    const src = c.lead_source || '— Unknown —';
+    if (sourceMap.has(src)) sourceMap.get(src).mrr += Number(p.monthly_premium);
+  }
+  const sourceRows = [...sourceMap.entries()]
+    .sort((a, b) => b[1].mrr - a[1].mrr)
+    .map(([src, stats]) => {
+      const convRate = stats.contacts ? ((stats.won / stats.contacts) * 100).toFixed(0) + '%' : '—';
+      return `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 10px">${escapeHTML(src)}</td>
+          <td style="padding:8px 10px;text-align:right">${stats.contacts}</td>
+          <td style="padding:8px 10px;text-align:right;color:var(--success)">${stats.won}</td>
+          <td style="padding:8px 10px;text-align:right;color:var(--muted)">${convRate}</td>
+          <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmtUSD(stats.mrr)}</td>
+        </tr>`;
+    }).join('');
+
+  // ----- Win rate by carrier -----
+  const carrierMap = new Map();
+  for (const p of (crmPolicies || [])) {
+    const c = p.carrier || '— Unknown carrier —';
+    if (!carrierMap.has(c)) carrierMap.set(c, { policies: 0, mrr: 0, monthlyCommission: 0 });
+    const stats = carrierMap.get(c);
+    stats.policies++;
+    if (p.monthly_premium != null) stats.mrr += Number(p.monthly_premium);
+    if (typeof estimateCommission === 'function') {
+      const est = estimateCommission(p);
+      if (est && est.monthly) stats.monthlyCommission += est.monthly;
+    }
+  }
+  const carrierTotal = [...carrierMap.values()].reduce((a, s) => a + s.mrr, 0) || 1;
+  const carrierRows = [...carrierMap.entries()]
+    .sort((a, b) => b[1].mrr - a[1].mrr)
+    .map(([carrier, stats]) => {
+      const sharePct = ((stats.mrr / carrierTotal) * 100).toFixed(0) + '%';
+      return `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 10px">${escapeHTML(carrier)}</td>
+          <td style="padding:8px 10px;text-align:right">${stats.policies}</td>
+          <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmtUSD(stats.mrr)}</td>
+          <td style="padding:8px 10px;text-align:right;color:var(--success)">${fmtUSD(stats.monthlyCommission)}</td>
+          <td style="padding:8px 10px;text-align:right;color:var(--muted)">${sharePct}</td>
+        </tr>`;
+    }).join('');
+
+  // ----- Empty-state helper for users with no data yet -----
+  const emptyCard = (msg) => `<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:24px">${msg}</div>`;
+
+  body.innerHTML = `
+    <div style="padding:20px">
+      <!-- KPI cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px">
+        ${kpiCard('YTD Commission', fmtUSD(ytdCommission), `Annualized: ${fmtUSD(annualizedCommission)}`, 'var(--success)')}
+        ${kpiCard('MRR', fmtUSD(totalMRR), `${activePolicies.length} active polic${activePolicies.length === 1 ? 'y' : 'ies'}`)}
+        ${kpiCard('Active Clients', String(activeClients), '')}
+        ${kpiCard('Conversion Rate', fmtPct(conversionRate), `${wonDeals.length} won / ${crmDeals.length} deals`)}
+        ${kpiCard('Win Rate', fmtPct(winRate), `${wonDeals.length} won / ${closedDeals} closed`, 'var(--yellow)')}
+      </div>
+
+      <!-- Conversion funnel -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:12px">Conversion Funnel</div>
+        ${savedLeads.length || crmDeals.length ? funnelHTML : emptyCard('No saved leads or deals yet — try saving a quote.')}
+      </div>
+
+      <!-- MRR trend -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:12px">MRR Trend — last 12 months</div>
+        ${activePolicies.length ? mrrChartSVG : emptyCard('Add policies with start dates and monthly premiums to populate this chart.')}
+      </div>
+
+      <!-- Lead source ROI -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:12px">Lead Source ROI</div>
+        ${sourceRows ? `
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Source</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Contacts</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Won</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Conv %</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">MRR</th>
+              </tr>
+            </thead>
+            <tbody>${sourceRows}</tbody>
+          </table>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">Tip: tag every new lead's source so this table tells you where your best clients come from.</div>
+        ` : emptyCard('No contacts yet.')}
+      </div>
+
+      <!-- Carrier breakdown -->
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title" style="margin-bottom:12px">Book by Carrier</div>
+        ${carrierRows ? `
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Policies</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">MRR</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Monthly Comm</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Share</th>
+              </tr>
+            </thead>
+            <tbody>${carrierRows}</tbody>
+          </table>
+        ` : emptyCard('No policies yet.')}
+      </div>
+
+      <!-- USHA forecast / what-if (Tier 4) -->
+      <div class="card" style="margin-top:14px;margin-bottom:0">
+        <div class="card-title" style="margin-bottom:12px">USHA — Forecast a new policy</div>
+        <div class="save-grid-2" style="gap:10px;margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label class="label">Product</label>
+            <select class="input" id="forecastProduct" onchange="renderUSHAForecast()">
+              <option value="">— Pick one —</option>
+              ${USHA_PRODUCTS.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0"><label class="label">Monthly Premium ($)</label>
+            <input class="input" id="forecastPremium" type="number" step="1" placeholder="e.g. 250" oninput="renderUSHAForecast()" />
+          </div>
+        </div>
+        <div class="save-grid-2" style="gap:10px;margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label class="label">Coverage Level</label>
+            <select class="input" id="forecastCoverage" onchange="renderUSHAForecast()">
+              <option value="">— Not specified —</option>
+              <option value="Single">Single</option>
+              <option value="Couple">Couple</option>
+              <option value="Family">Family</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0"><label class="label"># of Policies (multiplier)</label>
+            <input class="input" id="forecastCount" type="number" step="1" min="1" value="1" oninput="renderUSHAForecast()" />
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:10px"><label class="label">State (2-letter)</label>
+          <input class="input" id="forecastState" type="text" maxlength="2" placeholder="FL" style="text-transform:uppercase;max-width:120px" oninput="renderUSHAForecast()" />
+        </div>
+        <div id="forecastResult" style="font-size:12.5px;color:var(--muted);padding:14px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;text-align:center">
+          Pick a product and enter a premium to see projected commission.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Render the forecast result panel — called on every input change.
+function renderUSHAForecast() {
+  const productId = (document.getElementById('forecastProduct') || { value: '' }).value;
+  const premium = parseFloat((document.getElementById('forecastPremium') || { value: '' }).value) || 0;
+  const coverage = (document.getElementById('forecastCoverage') || { value: '' }).value;
+  const state = ((document.getElementById('forecastState') || { value: '' }).value || '').toUpperCase();
+  const count = Math.max(1, parseInt((document.getElementById('forecastCount') || { value: '1' }).value) || 1);
+  const out = document.getElementById('forecastResult');
+  if (!out) return;
+  if (!productId || premium <= 0) {
+    out.innerHTML = 'Pick a product and enter a premium to see projected commission.';
+    return;
+  }
+  const calc = calculateUSHACommission({
+    productId, state, coverageLevel: coverage,
+    monthlyPremium: premium, policyStartIso: null, isExchangeOrRewrite: false
+  });
+  if (!calc) { out.innerHTML = 'Could not find a rate for that combo.'; return; }
+  const fmt = n => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const rows = calc.breakdown.map(b =>
+    `<tr style="border-bottom:1px solid var(--border)">
+       <td style="padding:5px 8px;font-size:11.5px;color:var(--muted)">Year ${b.year}</td>
+       <td style="padding:5px 8px;font-size:11.5px;color:var(--muted);text-align:right">${(b.rate*100).toFixed(2)}%</td>
+       <td style="padding:5px 8px;font-size:11.5px;text-align:right">${fmt(b.monthly * count)}/mo</td>
+       <td style="padding:5px 8px;font-size:11.5px;text-align:right;color:var(--yellow)">${fmt(b.annual * count)}</td>
+     </tr>`
+  ).join('');
+  const lifetimeAtCount = calc.lifetimeTotal * count;
+  out.innerHTML = `
+    <div style="text-align:left">
+      <div style="font-size:13px;color:var(--white);margin-bottom:4px"><strong>${escapeHTML(calc.productName)}</strong>${count > 1 ? ` × ${count}` : ''}</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Commissionable premium: ${fmt(calc.commissionablePremium)}/mo · ${fmt(calc.commissionablePremium - calc.totalPremium > 0 ? 0 : (calc.totalPremium - calc.commissionablePremium))} non-comm fee</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:5px 8px;text-align:left;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Year</th>
+            <th style="padding:5px 8px;text-align:right;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Rate</th>
+            <th style="padding:5px 8px;text-align:right;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Monthly</th>
+            <th style="padding:5px 8px;text-align:right;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Annual</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="font-size:13px;color:var(--success);font-weight:600;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);text-align:right">10-year lifetime: ${fmt(lifetimeAtCount)}</div>
+    </div>
+  `;
 }
 
 // ---------- COMMISSIONS TAB ----------
@@ -6825,6 +8099,8 @@ function renderCRMRenewals() {
 
   body.innerHTML = `
     <div style="padding:20px">
+      ${renderOEPBanner()}
+      ${renderOEPProgressCard()}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px">
         <div class="card" style="margin-bottom:0">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Overdue</div>
@@ -7175,21 +8451,71 @@ function gcalDisconnect() {
 }
 
 function updateGCalButton() {
+  // Legacy header button (removed in Tier 4 — kept harmless via null check
+  // in case some old tab is still around).
   const label = document.getElementById('gcalConnectLabel');
   const btn = document.getElementById('gcalConnectBtn');
-  if (!label || !btn) return;
-  if (gcalConnected) {
-    label.textContent = 'Google: ON';
-    btn.style.background = 'rgba(61,191,138,0.15)';
-    btn.style.borderColor = 'rgba(61,191,138,0.4)';
-    btn.style.color = 'var(--success)';
-    btn.title = 'Google Calendar + Gmail connected. Click to disconnect.';
-  } else {
-    label.textContent = 'Connect Google';
-    btn.style.background = '';
-    btn.style.borderColor = '';
-    btn.style.color = '';
-    btn.title = 'Connect Google Calendar + Gmail';
+  if (label && btn) {
+    if (gcalConnected) {
+      label.textContent = 'Google: ON';
+      btn.style.background = 'rgba(61,191,138,0.15)';
+      btn.style.borderColor = 'rgba(61,191,138,0.4)';
+      btn.style.color = 'var(--success)';
+      btn.title = 'Google Calendar + Gmail connected. Click to disconnect.';
+    } else {
+      label.textContent = 'Connect Google';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+      btn.style.color = '';
+      btn.title = 'Connect Google Calendar + Gmail';
+    }
+  }
+  // Also refresh the Settings modal state if it's open.
+  if (typeof refreshSettingsModalV2State === 'function') refreshSettingsModalV2State();
+}
+
+// ---------- CONSOLIDATED SETTINGS MODAL (Tier 4) ----------
+// Replaces three header buttons (Connect Google / Change Password / Connection)
+// with a single gear icon. The modal hosts each setting as a row with its own
+// action button so the workspace header stays uncluttered.
+function openSettingsModalV2() {
+  const m = document.getElementById('crmSettingsModalV2');
+  if (!m) return;
+  m.style.display = 'flex';
+  refreshSettingsModalV2State();
+}
+function closeSettingsModalV2() {
+  const m = document.getElementById('crmSettingsModalV2');
+  if (m) m.style.display = 'none';
+}
+function refreshSettingsModalV2State() {
+  // Google
+  const gcalState = document.getElementById('settingsV2_gcalState');
+  const gcalBtn = document.getElementById('settingsV2_gcalBtn');
+  if (gcalState && gcalBtn) {
+    if (gcalConnected) {
+      gcalState.textContent = '✓ Connected';
+      gcalState.style.color = 'var(--success)';
+      gcalBtn.textContent = 'Disconnect';
+    } else {
+      gcalState.textContent = 'Not connected';
+      gcalState.style.color = 'var(--muted)';
+      gcalBtn.textContent = 'Connect';
+    }
+  }
+  // Supabase / CRM database
+  const dbState = document.getElementById('settingsV2_dbState');
+  if (dbState) {
+    if (crmClient && crmUser) {
+      dbState.textContent = `✓ Signed in as ${crmUser.email || ''}`;
+      dbState.style.color = 'var(--success)';
+    } else if (crmClient) {
+      dbState.textContent = 'Configured but not signed in';
+      dbState.style.color = 'var(--yellow)';
+    } else {
+      dbState.textContent = 'Not configured';
+      dbState.style.color = 'var(--muted)';
+    }
   }
 }
 
@@ -7345,6 +8671,121 @@ async function gmailFetch(path, options) {
     res = await doFetch();
   }
   return res;
+}
+
+// ---------- QUOTE HISTORY (Tier 4) ----------
+// Each Save-Lead action creates its own deal in CRM, so each quote becomes a
+// separate deal row with its own quote_data. This helper aggregates all of a
+// contact's deals into a chronological list so the Deal Detail can show
+// "last year vs this year" for renewal conversations.
+
+function getQuoteHistoryForContact(contactId) {
+  if (!contactId) return [];
+  return (crmDeals || [])
+    .filter(d => d.contact_id === contactId)
+    .map(d => {
+      const qd = d.quote_data || {};
+      // Skip deals that never received a quote (no acaMin/acaMax)
+      if (qd.acaMin == null && qd.acaMax == null && qd.subMin == null && qd.subMax == null) return null;
+      const stage = crmStages.find(s => s.id === d.stage_id);
+      return {
+        dealId: d.id,
+        quotedAt: qd.savedAt || d.created_at,
+        acaMin: qd.acaMin,
+        acaMax: qd.acaMax,
+        subMin: qd.subMin,
+        subMax: qd.subMax,
+        ppoMin: qd.ppoMin,
+        ppoMax: qd.ppoMax,
+        planCount: qd.planCount || (Array.isArray(qd.plans) ? qd.plans.length : null),
+        county: qd.county || (qd.countyName ? qd.countyName + ', ' + (qd.countyState || '') : ''),
+        zip: qd.zip,
+        income: qd.income,
+        peopleCount: Array.isArray(qd.people) ? qd.people.length : null,
+        stageName: stage ? stage.name : '',
+        stageIsWon: stage ? !!stage.is_won : false,
+        stageIsLost: stage ? !!stage.is_lost : false,
+        notes: qd.notes
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.quotedAt || '').localeCompare(a.quotedAt || ''));
+}
+
+function renderQuoteHistoryForContact(contactId, currentDealId) {
+  const history = getQuoteHistoryForContact(contactId);
+  if (!history.length) {
+    return '<div style="font-size:12px;color:var(--muted);padding:4px 0">No prior quotes — save a lead from the quote tool to start tracking.</div>';
+  }
+
+  // Renewal-comparison highlight if 2+ quotes exist.
+  let comparisonHTML = '';
+  if (history.length >= 2) {
+    const newest = history[0], prev = history[1];
+    const fmt = n => (n != null) ? '$' + Math.round(n).toLocaleString() : '—';
+    const delta = (cur, old) => {
+      if (cur == null || old == null || old === 0) return '';
+      const pct = ((cur - old) / old) * 100;
+      const sign = pct >= 0 ? '+' : '';
+      const color = Math.abs(pct) < 1 ? 'var(--muted)' : (pct > 0 ? 'var(--error)' : 'var(--success)');
+      return `<span style="font-size:11px;color:${color};margin-left:6px">(${sign}${pct.toFixed(0)}%)</span>`;
+    };
+    const formatDate = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    comparisonHTML = `
+      <div style="background:linear-gradient(135deg,rgba(253,199,47,0.10),rgba(253,199,47,0.03));border:1px solid rgba(253,199,47,0.3);border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="font-size:12px;color:var(--yellow);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:10px">Renewal comparison</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Previous quote · ${formatDate(prev.quotedAt)}</div>
+            <div style="font-size:13px;color:var(--white)">ACA: ${fmt(prev.acaMin)}–${fmt(prev.acaMax)}/mo</div>
+            ${prev.subMin != null ? `<div style="font-size:11.5px;color:var(--muted);margin-top:2px">After subsidy: ${fmt(prev.subMin)}–${fmt(prev.subMax)}/mo</div>` : ''}
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Newest quote · ${formatDate(newest.quotedAt)}</div>
+            <div style="font-size:13px;color:var(--white)">ACA: ${fmt(newest.acaMin)}${delta(newest.acaMin, prev.acaMin)}–${fmt(newest.acaMax)}${delta(newest.acaMax, prev.acaMax)}/mo</div>
+            ${newest.subMin != null ? `<div style="font-size:11.5px;color:var(--muted);margin-top:2px">After subsidy: ${fmt(newest.subMin)}${delta(newest.subMin, prev.subMin)}–${fmt(newest.subMax)}${delta(newest.subMax, prev.subMax)}/mo</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Per-quote rows (chronological, newest first)
+  const rows = history.map(h => {
+    const isCurrent = h.dealId === currentDealId;
+    const fmt = n => (n != null) ? '$' + Math.round(n).toLocaleString() : '—';
+    const dateLabel = h.quotedAt ? new Date(h.quotedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const stageBadge = h.stageIsWon
+      ? `<span style="font-size:10px;background:rgba(61,191,138,0.15);color:var(--success);border:1px solid rgba(61,191,138,0.3);padding:1px 7px;border-radius:9px;margin-left:6px">${escapeHTML(h.stageName)}</span>`
+      : h.stageIsLost
+      ? `<span style="font-size:10px;background:rgba(224,92,92,0.12);color:var(--error);border:1px solid rgba(224,92,92,0.3);padding:1px 7px;border-radius:9px;margin-left:6px">${escapeHTML(h.stageName)}</span>`
+      : `<span style="font-size:10px;color:var(--muted);margin-left:6px">${escapeHTML(h.stageName)}</span>`;
+    const click = isCurrent ? '' : `onclick="closeDealDetail();setTimeout(()=>openDealDetail('${h.dealId}'),50)"`;
+    const cursor = isCurrent ? 'default' : 'pointer';
+    const meta = [
+      h.county ? `${escapeHTML(h.county)}` : '',
+      h.zip ? `ZIP ${escapeHTML(h.zip)}` : '',
+      h.peopleCount ? `${h.peopleCount} ${h.peopleCount === 1 ? 'person' : 'people'}` : '',
+      h.income ? `Income $${Math.round(h.income).toLocaleString()}` : '',
+      h.planCount ? `${h.planCount} plans` : ''
+    ].filter(Boolean).join(' · ');
+    return `
+      <div ${click} style="padding:10px 12px;border:1px solid ${isCurrent ? 'rgba(253,199,47,0.4)' : 'var(--border)'};border-radius:8px;margin-bottom:6px;cursor:${cursor};background:${isCurrent ? 'rgba(253,199,47,0.04)' : 'transparent'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+          <div style="font-size:12.5px;color:var(--white)">
+            <strong>${dateLabel}</strong>${isCurrent ? ' <span style="font-size:10px;color:var(--yellow);margin-left:4px">(this deal)</span>' : ''}${stageBadge}
+          </div>
+          <div style="font-size:12px;color:var(--yellow);font-weight:600">ACA ${fmt(h.acaMin)}–${fmt(h.acaMax)}/mo</div>
+        </div>
+        ${h.subMin != null ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">After subsidy: ${fmt(h.subMin)}–${fmt(h.subMax)}/mo</div>` : ''}
+        ${meta ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${meta}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  return `
+    ${comparisonHTML}
+    ${rows}
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">${history.length} quote${history.length === 1 ? '' : 's'} on file. Click any prior quote to jump to that deal.</div>
+  `;
 }
 
 // Renders the Email Threads panel inside Deal Detail.
