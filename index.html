@@ -1235,9 +1235,23 @@
           <input class="input" id="saveLeadIncome" type="number" placeholder="e.g. 45000" />
         </div>
       </div>
-      <div class="field" style="margin-bottom:0">
+      <div class="field">
         <label class="label">Address<span class="field-optional-mark">optional</span></label>
         <input class="input" id="saveLeadAddress" type="text" placeholder="123 Main St, Tampa, FL 33601" />
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label class="label">Lead Source<span class="field-optional-mark">optional</span></label>
+        <select class="input" id="saveLeadSource">
+          <option value="">— Select source —</option>
+          <option value="Referral - existing client">Referral — existing client</option>
+          <option value="Referral - other">Referral — other</option>
+          <option value="Facebook Ad">Facebook Ad</option>
+          <option value="Google / Web search">Google / Web search</option>
+          <option value="Cold call / outreach">Cold call / outreach</option>
+          <option value="Networking event">Networking event</option>
+          <option value="Walk-in">Walk-in</option>
+          <option value="Other">Other</option>
+        </select>
       </div>
       <div class="modal-note" style="margin-top:16px">
         💾 <strong>Saved locally on this device.</strong> The full quote — email, SMS, and details — is stored so you can re-open it anytime. You can also push the lead to your CRM from the Saved Leads page.
@@ -2102,6 +2116,8 @@ function addSpouse() {
   self.insertAdjacentElement('afterend', row);
   updateAddButtons();
   autofillPPO();
+  // Wire paste-friendly handlers on the new row's inputs.
+  if (typeof applyPasteHelpersToAllInputs === 'function') applyPasteHelpersToAllInputs();
 }
 
 function addDependent() {
@@ -2128,6 +2144,8 @@ function addDependent() {
   `;
   list.appendChild(row);
   autofillPPO();
+  // Wire paste-friendly handlers on the new dependent row.
+  if (typeof applyPasteHelpersToAllInputs === 'function') applyPasteHelpersToAllInputs();
 }
 
 function removePerson(btn) {
@@ -2154,9 +2172,13 @@ function switchAgeMode(radio) {
     input.value = existingDOB;
     input.removeAttribute('min');
     input.removeAttribute('max');
-    // Cap at today
-    const today = new Date().toISOString().slice(0, 10);
+    // Cap at today (local time, not UTC — otherwise late-evening EST users would
+    // see "tomorrow" allowed as a DOB).
+    const today = todayLocalISO();
     input.setAttribute('max', today);
+    // Type just flipped to date — re-wire paste handler so MM/DD/YYYY pastes work.
+    delete input.dataset.pasteWired;
+    if (typeof makeDateInputPasteable === 'function') makeDateInputPasteable(input);
   } else {
     // Switch date → number; preserve the computed age
     if (input.type === 'date' && input.value) {
@@ -2218,7 +2240,12 @@ function setStep(s) {
 
 function showError(msg) {
   const el = document.getElementById('errorMsg');
-  el.textContent = msg;
+  // Allow HTML-formatted error messages (e.g. links to state exchange portals).
+  if (typeof msg === 'string' && /<[a-z][\s\S]*>/i.test(msg)) {
+    el.innerHTML = msg;
+  } else {
+    el.textContent = msg;
+  }
   el.style.display = 'block';
   const btn = document.getElementById('fetchBtn');
   btn.disabled = false;
@@ -2226,6 +2253,33 @@ function showError(msg) {
   const isEditing = banner && banner.style.display !== 'none';
   btn.innerHTML = isEditing ? '🔄 Update Quote' : 'Get ACA Plans';
 }
+
+// State-based exchanges — these states run their own marketplaces and are
+// NOT in the federal Marketplace API (healthcare.gov). Submitting a quote
+// for a ZIP in one of these states returns "state is not a valid marketplace
+// state" (code 1003). We detect them after county lookup and short-circuit
+// with a friendly redirect to the right portal.
+const STATE_BASED_EXCHANGES = {
+  CA: { name: 'Covered California',                url: 'https://www.coveredca.com/' },
+  CO: { name: 'Connect for Health Colorado',       url: 'https://connectforhealthco.com/' },
+  CT: { name: 'Access Health CT',                  url: 'https://www.accesshealthct.com/' },
+  DC: { name: 'DC Health Link',                    url: 'https://www.dchealthlink.com/' },
+  ID: { name: 'Your Health Idaho',                 url: 'https://www.yourhealthidaho.org/' },
+  KY: { name: 'kynect',                            url: 'https://kynect.ky.gov/' },
+  ME: { name: 'CoverME.gov',                       url: 'https://www.coverme.gov/' },
+  MD: { name: 'Maryland Health Connection',        url: 'https://www.marylandhealthconnection.gov/' },
+  MA: { name: 'Massachusetts Health Connector',    url: 'https://www.mahealthconnector.org/' },
+  MN: { name: 'MNsure',                            url: 'https://www.mnsure.org/' },
+  NV: { name: 'Nevada Health Link',                url: 'https://www.nevadahealthlink.com/' },
+  NJ: { name: 'Get Covered New Jersey',            url: 'https://www.nj.gov/getcoverednj/' },
+  NM: { name: 'beWellnm',                          url: 'https://www.bewellnm.com/' },
+  NY: { name: 'NY State of Health',                url: 'https://nystateofhealth.ny.gov/' },
+  PA: { name: 'Pennie',                            url: 'https://pennie.com/' },
+  RI: { name: 'HealthSource RI',                   url: 'https://healthsourceri.com/' },
+  VT: { name: 'Vermont Health Connect',            url: 'https://portal.healthconnect.vermont.gov/' },
+  VA: { name: "Virginia's Insurance Marketplace",  url: 'https://www.marketplace.virginia.gov/' },
+  WA: { name: 'Washington Healthplanfinder',       url: 'https://www.wahealthplanfinder.org/' }
+};
 
 async function fetchQuote() {
   const name = document.getElementById('clientName').value.trim();
@@ -2257,6 +2311,18 @@ async function fetchQuote() {
       throw new Error('No county found for ZIP ' + zip + '. Please verify the ZIP code.');
     }
     const county = countyData.counties[0];
+
+    // Short-circuit for state-based exchanges — the federal Marketplace API
+    // doesn't carry plans for these states, and submitting returns the
+    // "state is not a valid marketplace state" error.
+    const sbe = STATE_BASED_EXCHANGES[(county.state || '').toUpperCase()];
+    if (sbe) {
+      const stateName = county.state || '';
+      throw new Error(
+        `${stateName} runs its own marketplace — plans aren't available through the federal exchange (this tool's data source). ` +
+        `Get a quote for this client at <a href="${sbe.url}" target="_blank" rel="noopener" style="color:var(--yellow);text-decoration:underline">${sbe.name}</a>.`
+      );
+    }
 
     btn.innerHTML = '<span class="spinner"></span> Fetching ACA plan prices...';
 
@@ -2808,6 +2874,104 @@ function formatPhoneInput(value) {
   return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
 }
 
+// ---------- PASTE-FRIENDLY HELPERS ----------
+// Browsers reject "messy" paste content on type="number" (commas, dollar signs)
+// and type="date" (anything except YYYY-MM-DD). These helpers normalize common
+// formats so users can paste from Apple Contacts, spreadsheets, etc.
+
+// Parse common DOB formats into a YYYY-MM-DD ISO string. Returns '' on failure.
+// Accepts: 01/15/1990, 1/15/90, 1990-01-15, Jan 15 1990, 15-Jan-1990, etc.
+function parseFlexibleDate(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (!s) return '';
+
+  // Already ISO-like → just normalize and validate.
+  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+  if (m) return isoOrEmpty(+m[1], +m[2], +m[3]);
+
+  // M/D/YYYY or M-D-YYYY or M.D.YYYY
+  m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/);
+  if (m) {
+    let yr = +m[3];
+    if (yr < 100) yr += yr < 30 ? 2000 : 1900; // 2-digit year heuristic
+    return isoOrEmpty(yr, +m[1], +m[2]);
+  }
+
+  // Fall back to Date parser for "Jan 15, 1990" etc — but force LOCAL time.
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return isoOrEmpty(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  }
+  return '';
+}
+function isoOrEmpty(y, mo, d) {
+  if (!y || !mo || !d) return '';
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${y}-${pad(mo)}-${pad(d)}`;
+}
+
+// Wire paste-handling onto a date input so MM/DD/YYYY etc. are accepted.
+function makeDateInputPasteable(input) {
+  if (!input || input.dataset.pasteWired === '1') return;
+  input.dataset.pasteWired = '1';
+  input.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    const iso = parseFlexibleDate(text);
+    if (iso) {
+      e.preventDefault();
+      input.value = iso;
+      // Notify any framework listeners.
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+}
+
+// Wire paste-handling onto a numeric input so "$45,000" / "45,000.00" → "45000".
+function makeNumberInputPasteable(input) {
+  if (!input || input.dataset.pasteWired === '1') return;
+  input.dataset.pasteWired = '1';
+  input.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text) return;
+    // Strip everything that's not a digit, decimal, or leading minus.
+    const cleaned = text.replace(/[^\d.\-]/g, '');
+    if (cleaned !== text) {
+      e.preventDefault();
+      input.value = cleaned;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+}
+
+// Wire paste-handling onto a phone input so "+1 (555) 123-4567" pastes cleanly.
+function makePhoneInputPasteable(input) {
+  if (!input || input.dataset.pastePhoneWired === '1') return;
+  input.dataset.pastePhoneWired = '1';
+  input.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text) return;
+    e.preventDefault();
+    input.value = formatPhoneInput(text);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+// Apply paste-friendly handlers to every relevant input on the page. Idempotent
+// (each input tracks a `data-paste-wired` flag) so it's safe to call repeatedly
+// — useful after the quote roster adds new rows or after modals re-render.
+function applyPasteHelpersToAllInputs() {
+  // Date inputs (DOB on quote roster, Save Lead DOB, task due date, etc.)
+  document.querySelectorAll('input[type="date"]').forEach(makeDateInputPasteable);
+  // Number inputs (income, ages, premium, etc.)
+  document.querySelectorAll('input[type="number"]').forEach(makeNumberInputPasteable);
+  // Phone / tel inputs
+  document.querySelectorAll('input[type="tel"]').forEach(makePhoneInputPasteable);
+}
+
 function openSaveLeadModal() {
   if (!currentQuoteData) {
     alert('No quote to save yet. Please generate a quote first.');
@@ -2818,6 +2982,9 @@ function openSaveLeadModal() {
   document.getElementById('saveLeadEmail').value = '';
   document.getElementById('saveLeadAddress').value = '';
   document.getElementById('saveLeadIncome').value = currentQuoteData.income ? String(currentQuoteData.income) : '';
+  // Reset lead source dropdown so previous values don't leak across saves.
+  const leadSrcSel = document.getElementById('saveLeadSource');
+  if (leadSrcSel) leadSrcSel.value = '';
   // Pre-fill DOB if the Self row had one
   const selfDOB = (currentQuoteData.people && currentQuoteData.people[0] && currentQuoteData.people[0].dob) || '';
   document.getElementById('saveLeadDOB').value = selfDOB;
@@ -2857,6 +3024,8 @@ function confirmSaveLead() {
   const editedAddress = document.getElementById('saveLeadAddress').value.trim();
   const editedIncomeRaw = document.getElementById('saveLeadIncome').value.trim();
   const editedIncome = editedIncomeRaw ? parseFloat(editedIncomeRaw) : null;
+  // Lead source — written to the saved lead record + carried into the CRM contact later.
+  const editedLeadSource = (document.getElementById('saveLeadSource') || { value: '' }).value || null;
 
   // Light email validation — only if provided
   if (editedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editedEmail)) {
@@ -2882,6 +3051,7 @@ function confirmSaveLead() {
     dob: editedDOB || null,
     address: editedAddress || null,
     income: (editedIncome !== null && !isNaN(editedIncome)) ? editedIncome : (currentQuoteData.income || null),
+    leadSource: editedLeadSource,
     crmSyncedAt: null,
     crmContactId: null,
     crmDealId: null
@@ -3114,7 +3284,8 @@ function leadToContactRow(lead, owner_id) {
     dob:        lead.dob   || null,
     address:    lead.address || null,
     zip:        lead.zip   || null,
-    annual_income: (lead.income != null && !isNaN(lead.income)) ? lead.income : null
+    annual_income: (lead.income != null && !isNaN(lead.income)) ? lead.income : null,
+    lead_source: lead.leadSource || null
   };
 }
 
@@ -3280,6 +3451,39 @@ function showToast(msg, variant) {
   setTimeout(() => { t.style.transition = 'opacity 0.3s'; t.style.opacity = '0'; }, lingerMs);
   setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, lingerMs + 500);
 }
+
+// ---------- DATE HELPERS ----------
+// CRITICAL: `new Date("2026-04-25")` parses as UTC midnight, which renders as the
+// previous calendar day in any US timezone. These helpers keep date-only fields
+// (due_date, renewal_date, DOB) anchored to LOCAL time so "today" stays "today".
+
+// Parse a YYYY-MM-DD string as local-midnight (not UTC).
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  // Allow already-parsed Date objects through unchanged.
+  if (dateStr instanceof Date) return dateStr;
+  // Strip any time portion if caller passed a fuller string.
+  const justDate = String(dateStr).slice(0, 10);
+  const [y, m, d] = justDate.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d); // month is 0-indexed
+}
+
+// Format today's date as YYYY-MM-DD using LOCAL time.
+// Replaces `new Date().toISOString().slice(0,10)` which silently uses UTC.
+function todayLocalISO() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Format an arbitrary Date object as YYYY-MM-DD in LOCAL time.
+function toLocalISODate(d) {
+  if (!(d instanceof Date)) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // ===== End CRM integration =====
 
 // Close modals on overlay click or Escape
@@ -3310,6 +3514,10 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  // Wire up paste-friendly behavior on every existing input. New inputs added
+  // by roster row creation, task modal opens, etc. should also call this — see
+  // applyPasteHelpersToAllInputs() use sites for those.
+  applyPasteHelpersToAllInputs();
 });
 // ============ END SAVE LEAD FEATURE ============
 
@@ -3773,6 +3981,149 @@ function formatDealDate(iso) {
 }
 
 // ------- Deal-scoped renderers for Tier 1 features -------
+// ---------- ATTACHMENTS ----------
+// Files live in Supabase Storage bucket "deal-attachments". Each deal carries
+// a JSONB array `attachments` of {name, path, url, size, mime, uploaded_at}.
+// See supabase_attachments_migration.sql for schema + bucket setup.
+const ATTACHMENT_BUCKET = 'deal-attachments';
+const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB per file
+
+function renderAttachmentsForDeal(deal) {
+  if (!deal) return '';
+  const list = Array.isArray(deal.attachments) ? deal.attachments : [];
+  const items = list.map((a, idx) => {
+    const isImage = (a.mime || '').startsWith('image/');
+    const size = a.size ? `${(a.size / 1024).toFixed(0)} KB` : '';
+    const when = a.uploaded_at ? formatDealDate(a.uploaded_at) : '';
+    const meta = [size, when].filter(Boolean).join(' · ');
+    const icon = isImage ? '🖼' : '📎';
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,0.02)">
+        <div style="font-size:18px;line-height:1">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <a href="${escapeHTML(a.url || '#')}" target="_blank" rel="noopener" style="color:var(--white);font-size:12.5px;font-weight:500;text-decoration:none">${escapeHTML(a.name || 'file')}</a>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:2px">${escapeHTML(meta)}</div>
+        </div>
+        <button onclick="removeDealAttachment('${deal.id}', ${idx})" style="background:transparent;color:var(--muted);border:none;padding:4px 8px;cursor:pointer;font-size:11px" title="Remove">×</button>
+      </div>`;
+  }).join('');
+
+  return `
+    <div id="dd_attach_dropzone_${deal.id}"
+         ondragenter="onAttachDragEnter(event)"
+         ondragover="onAttachDragOver(event)"
+         ondragleave="onAttachDragLeave(event)"
+         ondrop="onAttachDrop(event, '${deal.id}')"
+         style="border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:background 0.15s,border-color 0.15s"
+         onclick="document.getElementById('dd_attach_input_${deal.id}').click()">
+      <div style="font-size:12.5px;color:var(--muted)">Drag &amp; drop files here, or click to browse</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Up to 25 MB each — images and documents</div>
+      <input type="file" id="dd_attach_input_${deal.id}" multiple style="display:none"
+             onchange="onAttachFilePicked(event, '${deal.id}')" />
+    </div>
+    <div id="dd_attach_list_${deal.id}" style="margin-top:10px">${items || '<div style="font-size:11.5px;color:var(--muted);text-align:center;padding:6px 0">No attachments yet.</div>'}</div>
+    <div id="dd_attach_status_${deal.id}" style="display:none;font-size:11px;color:var(--muted);margin-top:6px"></div>
+  `;
+}
+
+function onAttachDragEnter(e) { e.preventDefault(); e.currentTarget.style.background = 'rgba(255,205,77,0.06)'; e.currentTarget.style.borderColor = 'var(--yellow)'; }
+function onAttachDragOver(e)  { e.preventDefault(); }
+function onAttachDragLeave(e) { e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = ''; }
+async function onAttachDrop(e, dealId) {
+  e.preventDefault();
+  const zone = e.currentTarget;
+  zone.style.background = ''; zone.style.borderColor = '';
+  const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+  if (files.length) await uploadAttachmentsToDeal(dealId, files);
+}
+async function onAttachFilePicked(e, dealId) {
+  const files = e.target.files ? Array.from(e.target.files) : [];
+  if (files.length) await uploadAttachmentsToDeal(dealId, files);
+  e.target.value = ''; // reset so picking the same file again still triggers change
+}
+
+async function uploadAttachmentsToDeal(dealId, files) {
+  const deal = crmDeals.find(d => d.id === dealId);
+  if (!deal) { showToast('Deal not found', 'error'); return; }
+  const status = document.getElementById('dd_attach_status_' + dealId);
+  const setStatus = txt => { if (status) { status.style.display = 'block'; status.textContent = txt; } };
+
+  const existing = Array.isArray(deal.attachments) ? deal.attachments.slice() : [];
+  let added = 0;
+  for (const file of files) {
+    if (file.size > ATTACHMENT_MAX_BYTES) {
+      showToast(`${file.name} is over 25 MB — skipped`, 'error');
+      continue;
+    }
+    setStatus(`Uploading ${file.name}…`);
+    const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+    const path = `${crmUser.id}/${dealId}/${Date.now()}-${safeName}`;
+    try {
+      const { error: upErr } = await crmClient.storage.from(ATTACHMENT_BUCKET).upload(path, file, {
+        cacheControl: '3600', upsert: false, contentType: file.type || 'application/octet-stream'
+      });
+      if (upErr) throw upErr;
+      const { data: pub } = crmClient.storage.from(ATTACHMENT_BUCKET).getPublicUrl(path);
+      existing.push({
+        name: file.name,
+        path,
+        url: pub && pub.publicUrl ? pub.publicUrl : null,
+        size: file.size,
+        mime: file.type || null,
+        uploaded_at: new Date().toISOString()
+      });
+      added++;
+    } catch (err) {
+      console.warn('[Attach] upload failed', err);
+      showToast(`Upload failed for ${file.name}: ${err.message || err}`, 'error');
+    }
+  }
+  if (!added) { setStatus(''); return; }
+
+  // Persist updated array on the deal row.
+  try {
+    const { error } = await crmClient.from('deals')
+      .update({ attachments: existing })
+      .eq('id', dealId);
+    if (error) throw error;
+    deal.attachments = existing;
+    setStatus(`Added ${added} file${added === 1 ? '' : 's'}.`);
+    setTimeout(() => { if (status) status.style.display = 'none'; }, 2500);
+    // Re-render the deal modal so the list reflects the new files.
+    if (crmEditingDealId === dealId) openDealDetail(dealId);
+    showToast(`Uploaded ${added} attachment${added === 1 ? '' : 's'}.`, 'success');
+  } catch (err) {
+    showToast('Could not save attachments: ' + (err.message || err), 'error');
+  }
+}
+
+async function removeDealAttachment(dealId, index) {
+  const deal = crmDeals.find(d => d.id === dealId);
+  if (!deal || !Array.isArray(deal.attachments) || !deal.attachments[index]) return;
+  const att = deal.attachments[index];
+  const ok = await showConfirm({
+    title: 'Remove attachment?',
+    sub: att.name || 'this file',
+    body: 'The file will be deleted from storage and removed from this deal.',
+    okText: 'Yes, remove'
+  });
+  if (!ok) return;
+  try {
+    if (att.path) {
+      await crmClient.storage.from(ATTACHMENT_BUCKET).remove([att.path]);
+    }
+    const next = deal.attachments.slice();
+    next.splice(index, 1);
+    const { error } = await crmClient.from('deals').update({ attachments: next }).eq('id', dealId);
+    if (error) throw error;
+    deal.attachments = next;
+    if (crmEditingDealId === dealId) openDealDetail(dealId);
+    showToast('Attachment removed.', 'success');
+  } catch (err) {
+    showToast('Could not remove: ' + (err.message || err), 'error');
+  }
+}
+
 function renderTasksForDeal(deal) {
   if (!deal) return '';
   const relatedTasks = crmTasks.filter(t => t.deal_id === deal.id || (t.contact_id && t.contact_id === deal.contact_id));
@@ -3932,7 +4283,8 @@ function renderCRMDashboard() {
   const sixtyOut = new Date(today); sixtyOut.setDate(today.getDate() + 60);
   const renewalsSoon = crmPolicies.filter(p => {
     if (!p.renewal_date) return false;
-    const d = new Date(p.renewal_date);
+    const d = parseLocalDate(p.renewal_date);
+    if (!d) return false;
     return d >= today && d <= sixtyOut;
   }).length;
 
@@ -4580,12 +4932,22 @@ function openDealDetail(dealId) {
           <div class="field" style="margin-bottom:0"><label class="label">ZIP</label><input class="input" id="dd_zip" type="text" value="${escapeHTML(contact.zip || '')}" /></div>
         </div>
         <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Address</label><input class="input" id="dd_address" type="text" value="${escapeHTML(contact.address || '')}" /></div>
-        <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Annual Income ($)</label><input class="input" id="dd_income" type="number" step="1" value="${contact.annual_income != null ? contact.annual_income : ''}" /></div>
+        <div class="save-grid-2" style="gap:10px;margin-top:10px">
+          <div class="field" style="margin-bottom:0"><label class="label">Annual Income ($)</label><input class="input" id="dd_income" type="number" step="1" value="${contact.annual_income != null ? contact.annual_income : ''}" /></div>
+          <div class="field" style="margin-bottom:0"><label class="label">Lead Source</label>
+            <select class="input" id="dd_lead_source">
+              <option value="">—</option>
+              ${['Referral - existing client','Referral - other','Facebook Ad','Google / Web search','Cold call / outreach','Networking event','Walk-in','Other'].map(s => `<option value="${escapeHTML(s)}"${(contact.lead_source||'')===s?' selected':''}>${escapeHTML(s)}</option>`).join('')}
+              ${contact.lead_source && !['Referral - existing client','Referral - other','Facebook Ad','Google / Web search','Cold call / outreach','Networking event','Walk-in','Other'].includes(contact.lead_source) ? `<option value="${escapeHTML(contact.lead_source)}" selected>${escapeHTML(contact.lead_source)}</option>` : ''}
+            </select>
+          </div>
+        </div>
       `)}
       ${section('Notes', `
         <textarea class="input" id="dd_notes" rows="5" placeholder="Leave any notes for this lead — call outcomes, follow-up reminders, preferences, quoted plans, objections…" style="resize:vertical;min-height:100px;font-family:inherit;line-height:1.5;padding:10px 12px">${escapeHTML(qd.notes || '')}</textarea>
         <div style="font-size:11px;color:var(--muted);margin-top:4px" id="dd_notes_meta">${qd.notes_updated_at ? 'Last updated ' + formatDealDate(qd.notes_updated_at) : 'Tip: click Save Changes to persist your notes.'}</div>
       `)}
+      ${section('Attachments', renderAttachmentsForDeal(deal))}
       ${section('Tasks & Follow-ups', renderTasksForDeal(deal))}
       ${section('Activity Timeline', renderActivitiesForDeal(deal))}
       ${section('Policies', renderPoliciesForContact(deal.contact_id))}
@@ -4634,7 +4996,8 @@ async function saveDealFromDetail() {
       if (v === '') return null;
       const n = Number(v);
       return isNaN(n) ? null : n;
-    })()
+    })(),
+    lead_source: (document.getElementById('dd_lead_source') || { value: '' }).value || null
   };
 
   // Pull notes, merge into quote_data so we don't blow away the quote snapshot
@@ -4860,7 +5223,10 @@ function crmTaskBucket(task) {
   if (!task.due_date) return 'someday';
   const today = new Date();
   today.setHours(0,0,0,0);
-  const due = new Date(task.due_date);
+  // Use parseLocalDate so YYYY-MM-DD doesn't get interpreted as UTC midnight
+  // (which renders a day earlier in any US timezone).
+  const due = parseLocalDate(task.due_date);
+  if (!due) return 'someday';
   due.setHours(0,0,0,0);
   if (due < today) return 'overdue';
   if (due.getTime() === today.getTime()) return 'today';
@@ -4879,7 +5245,8 @@ function formatTaskDueLabel(task) {
   const bucket = crmTaskBucket(task);
   if (bucket === 'someday') return 'No due date';
   if (!task.due_date) return '';
-  const d = new Date(task.due_date);
+  const d = parseLocalDate(task.due_date);
+  if (!d) return '';
   const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
   if (task.due_time && /^\d{2}:\d{2}$/.test(task.due_time)) {
     const [hh, mm] = task.due_time.split(':').map(Number);
@@ -5010,6 +5377,11 @@ function openTaskModal(taskId, prefill) {
   document.getElementById('task_due_time').value    = task ? (task.due_time || '') : (prefill.due_time || '');
   document.getElementById('task_priority').value    = task ? (task.priority || 'normal') : (prefill.priority || 'normal');
   document.getElementById('task_description').value = task ? (task.description || '') : (prefill.description || '');
+  // Always default the "Sync to Google Calendar" checkbox to ON so users don't
+  // accidentally desync edits — without this, an unchecked state leaks across
+  // task opens and the Calendar event silently goes stale.
+  const gcalBox = document.getElementById('task_gcal');
+  if (gcalBox) gcalBox.checked = true;
   document.getElementById('taskDeleteBtn').style.display = task ? 'inline-block' : 'none';
   document.getElementById('taskModalError').style.display = 'none';
   document.getElementById('taskModal').style.display = 'flex';
@@ -5024,7 +5396,7 @@ function closeTaskModal() {
 // If due_time is set, uses a timed 1-hour block (YYYYMMDDTHHmmSS); otherwise all-day.
 function buildGCalURL(task, deal, contact) {
   const title = task.title || 'CRM Task';
-  const dateStr = task.due_date || new Date().toISOString().slice(0,10);
+  const dateStr = task.due_date || todayLocalISO();
   let start, end;
   if (task.due_time && /^\d{2}:\d{2}$/.test(task.due_time)) {
     // Timed event: Google render URL expects YYYYMMDDTHHmmSS (local time, no zone).
@@ -5123,26 +5495,42 @@ async function saveTaskFromModal() {
     if (syncToGCal && gcalConnected && taskRow) {
       const ctx = gcalResolveContext(taskRow);
       if (existingEventId) {
-        // edit path with prior event — patch it
+        // Edit path with prior event — try to PATCH it. If Google returns
+        // 404/410 (event deleted on their side), fall through to create a
+        // fresh event so the calendar stays in sync.
         const ok = await gcalUpdateEvent(existingEventId, taskRow, ctx.deal, ctx.contact);
-        if (ok) gcalMsg = ' Calendar updated.';
+        if (ok) {
+          gcalMsg = ' Calendar updated.';
+        } else {
+          // Update failed — try creating a replacement event.
+          const newEventId = await gcalCreateEvent(taskRow, ctx.deal, ctx.contact);
+          if (newEventId && savedTaskId) {
+            try {
+              await crmClient.from('tasks')
+                .update({ google_calendar_event_id: newEventId })
+                .eq('id', savedTaskId);
+            } catch (_) {}
+            gcalMsg = ' Calendar event recreated.';
+          } else {
+            gcalMsg = ' (Calendar sync failed — check connection.)';
+          }
+        }
       } else {
-        // create new event
+        // No prior event — create a new one.
         const newEventId = await gcalCreateEvent(taskRow, ctx.deal, ctx.contact);
         if (newEventId && savedTaskId) {
-          // persist the event id back to the task row (best-effort)
           try {
             await crmClient.from('tasks')
               .update({ google_calendar_event_id: newEventId })
               .eq('id', savedTaskId);
           } catch (_) {}
           gcalMsg = ' Added to Google Calendar.';
-        } else if (!gcalConnected) {
-          // shouldn't happen given guard above, but defensive
+        } else {
+          gcalMsg = ' (Calendar add failed — check connection.)';
         }
       }
     } else if (syncToGCal && !gcalConnected) {
-      gcalMsg = ' (Connect Calendar in the header to auto-sync.)';
+      gcalMsg = ' (Connect Google in the header to auto-sync.)';
     }
 
     await loadCRMData();
@@ -5176,9 +5564,15 @@ async function deleteTaskFromModal() {
     const { error } = await crmClient.from('tasks').delete().eq('id', crmEditingTaskId);
     if (error) throw error;
 
-    // Best-effort: remove the matching Google Calendar event. Don't block on it.
+    // Best-effort: remove the matching Google Calendar event. We AWAIT this
+    // so we can surface the result to the user (was a silent .then() before).
+    let calMsg = '';
     if (eventId && gcalConnected) {
-      gcalDeleteEvent(eventId);
+      try { await gcalDeleteEvent(eventId); calMsg = ' Calendar event removed.'; }
+      catch (_) { calMsg = ' (Calendar event may still exist — please remove manually.)'; }
+    } else if (gcalConnected && !eventId && task) {
+      // Old task created before Calendar sync existed — orphan event possible.
+      calMsg = ' (Old task — any matching Calendar event must be deleted manually.)';
     }
 
     await loadCRMData();
@@ -5186,7 +5580,7 @@ async function deleteTaskFromModal() {
     if (crmActiveTab === 'tasks') renderCRMTasks();
     if (crmEditingDealId) openDealDetail(crmEditingDealId);
     updateCRMTaskBadge();
-    showToast('Task deleted.', 'success');
+    showToast('Task deleted.' + calMsg, 'success');
   } catch (e) {
     showToast('Could not delete: ' + (e.message || e), 'error');
   }
@@ -6016,7 +6410,7 @@ function updateGCalButton() {
 // If due_time is set, creates a timed 1-hour event in the browser's timezone.
 // Otherwise creates an all-day event. Falls back to today if no due_date.
 function buildGCalEventBody(task, deal, contact) {
-  const dateStr = task.due_date || new Date().toISOString().slice(0,10);
+  const dateStr = task.due_date || todayLocalISO();
   const lines = [];
   if (task.description) lines.push(task.description);
   if (deal) lines.push('Deal: ' + (deal.name || crmContactLabel(deal)));
