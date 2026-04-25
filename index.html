@@ -1669,7 +1669,7 @@
       <button class="settings-gear" id="crmTabCommissions" onclick="showCRMTab('commissions')">Commissions</button>
       <button class="settings-gear" id="crmTabReports" onclick="showCRMTab('reports')">Reports</button>
       <div style="position:relative;flex:1;min-width:200px;max-width:340px;margin:0 4px">
-        <input id="crmSearchBar" type="text" placeholder="Search contacts, deals, email, phone…" autocomplete="off"
+        <input id="crmSearchBar" type="text" placeholder="Search name, email, phone, city, notes…" autocomplete="off"
                oninput="crmHandleSearch(this.value)" onfocus="crmHandleSearch(this.value)"
                style="width:100%;padding:7px 10px;font-size:12.5px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px" />
         <div id="crmSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#141927;border:1px solid var(--border);border-radius:8px;max-height:320px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,0.5)"></div>
@@ -3708,6 +3708,19 @@ function toLocalISODate(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Format a stored YYYY-MM-DD date-of-birth for human display.
+// Default = "August 22, 1991". Pass mode='short' for "08/22/1991".
+function formatDOB(dobStr, mode) {
+  if (!dobStr) return '';
+  const d = parseLocalDate(dobStr);
+  if (!d) return String(dobStr);
+  if (mode === 'short') {
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
+  }
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 // ===== End CRM integration =====
 
 // Close modals on overlay click or Escape
@@ -5604,6 +5617,10 @@ function renderCRMPipelines() {
             const countBadge = stageDeals.length > 0
               ? `<span style="background:${stageColor};color:var(--navy);padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:6px">${stageDeals.length}</span>`
               : '';
+            // Cap each stage column to a fixed height so big stages (e.g. 141
+            // imported clients in "Active Client") don't push every other
+            // pipeline below the fold. The header (name + count + win prob)
+            // stays pinned at top; the cards portion scrolls internally.
             return `
               <div class="crm-stage-col"
                    ondragover="crmDragOver(event)"
@@ -5611,10 +5628,12 @@ function renderCRMPipelines() {
                    ondragleave="crmDragLeave(event)"
                    ondrop="crmDrop(event, '${s.id}', '${p.id}')"
                    data-stage-id="${s.id}" data-pipeline-id="${p.id}"
-                   style="flex:0 0 200px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;min-height:110px">
+                   style="flex:0 0 220px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;max-height:520px;min-height:140px">
                 <div style="font-size:12px;color:${stageColor};font-weight:600;margin-bottom:4px;display:flex;align-items:center">${escapeHTML(s.name)}${countBadge}</div>
-                <div style="font-size:11px;color:var(--muted)">${Math.round((s.probability||0)*100)}% win prob</div>
-                ${cards || '<div style="font-size:11px;color:var(--muted);margin-top:8px;opacity:0.6">No deals yet</div>'}
+                <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${Math.round((s.probability||0)*100)}% win prob</div>
+                <div style="flex:1;overflow-y:auto;padding-right:4px;margin-right:-4px;-webkit-overflow-scrolling:touch">
+                  ${cards || '<div style="font-size:11px;color:var(--muted);margin-top:8px;opacity:0.6">No deals yet</div>'}
+                </div>
               </div>`;
           }).join('')}
         </div>
@@ -5996,9 +6015,13 @@ async function submitCRMImport() {
   progressEl.style.display = 'block';
   progressEl.textContent = `Importing 0 / ${toImport.length}…`;
 
-  for (let i = 0; i < toImport.length; i++) {
-    const r = toImport[i];
-    progressEl.textContent = `Importing ${i + 1} / ${toImport.length}…`;
+  // Parallel batches — each row does 2-3 round trips to Supabase
+  // (contact lookup + insert/update + deal insert). Sequential = ~250ms per
+  // round trip × ~2 = ~500ms per row × 141 rows = ~70s. Batching 8 at a time
+  // brings that down to ~9s for the same file. We don't go higher than 8 to
+  // avoid Supabase per-connection rate limiting on the free tier.
+  const BATCH_SIZE = 8;
+  const importOneRow = async (r) => {
     try {
       const notes = r.data.notes || '';
       // Heuristic enrichment from free-text notes — best-effort, never overrides
@@ -6069,11 +6092,21 @@ async function submitCRMImport() {
       if (createdAt) dealRow.created_at = createdAt;
       const { error: dealErr } = await crmClient.from('deals').insert(dealRow);
       if (dealErr) throw dealErr;
-      success++;
+      return { ok: true };
     } catch (e) {
-      failed++;
-      failures.push({ row: r.rowNumber, message: (e && e.message) || 'Unknown error' });
+      return { ok: false, row: r.rowNumber, message: (e && e.message) || 'Unknown error' };
     }
+  };
+
+  for (let i = 0; i < toImport.length; i += BATCH_SIZE) {
+    const batch = toImport.slice(i, i + BATCH_SIZE);
+    const done = Math.min(i + BATCH_SIZE, toImport.length);
+    progressEl.textContent = `Importing ${done} / ${toImport.length}…`;
+    const results = await Promise.all(batch.map(importOneRow));
+    results.forEach(res => {
+      if (res.ok) success++;
+      else { failed++; failures.push({ row: res.row, message: res.message }); }
+    });
   }
 
   progressEl.textContent = `Done. ${success} imported · ${failed} failed.`;
@@ -6240,7 +6273,7 @@ function openDealDetail(dealId) {
           <div class="field" style="margin-bottom:0"><label class="label">Phone</label><input class="input" id="dd_phone" type="tel" value="${escapeHTML(contact.phone || '')}" /></div>
         </div>
         <div class="save-grid-2" style="gap:10px;margin-top:10px">
-          <div class="field" style="margin-bottom:0"><label class="label">DOB</label><input class="input" id="dd_dob" type="text" placeholder="YYYY-MM-DD" value="${escapeHTML(contact.dob || '')}" /></div>
+          <div class="field" style="margin-bottom:0"><label class="label">DOB</label><input class="input" id="dd_dob" type="date" value="${escapeHTML(contact.dob || '')}" /></div>
           <div class="field" style="margin-bottom:0"><label class="label">ZIP</label><input class="input" id="dd_zip" type="text" value="${escapeHTML(contact.zip || '')}" /></div>
         </div>
         <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Address</label><input class="input" id="dd_address" type="text" value="${escapeHTML(contact.address || '')}" /></div>
@@ -6466,22 +6499,77 @@ document.addEventListener('keydown', (e) => {
 // =====================================================================
 
 // ---------- GLOBAL SEARCH ----------
+// Build the full searchable haystack for a contact: their own fields PLUS
+// every linked deal's name + notes + heuristics, PLUS every policy's
+// carrier/plan/notes/members. This is what powers "find the diabetic guy in
+// Tampa" type searches across all the rich free-text data.
+function crmContactHaystack(c) {
+  const dealsForContact = crmDeals.filter(d => d.contact_id === c.id);
+  const policiesForContact = (crmPolicies || []).filter(p => p.contact_id === c.id);
+  const parts = [
+    c.first_name, c.last_name, c.email, c.phone, c.zip, c.address,
+    c.city, c.state, c.lead_source, c.dob
+  ];
+  for (const d of dealsForContact) {
+    parts.push(d.name);
+    if (d.quote_data) {
+      parts.push(d.quote_data.notes);
+      if (d.quote_data.heuristics) {
+        // Heuristic-tagged data (vendor, USHA product, etc.) — searchable.
+        parts.push(JSON.stringify(d.quote_data.heuristics));
+      }
+    }
+  }
+  for (const p of policiesForContact) {
+    parts.push(p.carrier, p.plan_name, p.policy_number, p.notes, p.members_covered);
+  }
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+
+// Extract a short snippet from a notes-like field showing the match in context.
+// Returns "" if the query doesn't appear in any notes-like field.
+function crmFindMatchSnippet(c, q) {
+  const dealsForContact = crmDeals.filter(d => d.contact_id === c.id);
+  const policiesForContact = (crmPolicies || []).filter(p => p.contact_id === c.id);
+  const candidates = [];
+  for (const d of dealsForContact) {
+    if (d.quote_data && d.quote_data.notes) candidates.push(d.quote_data.notes);
+  }
+  for (const p of policiesForContact) {
+    if (p.notes) candidates.push(p.notes);
+  }
+  for (const text of candidates) {
+    const idx = String(text).toLowerCase().indexOf(q);
+    if (idx === -1) continue;
+    // Pull ~30 chars on either side.
+    const start = Math.max(0, idx - 30);
+    const end = Math.min(text.length, idx + q.length + 40);
+    let snip = text.slice(start, end).replace(/\s+/g, ' ').trim();
+    if (start > 0) snip = '…' + snip;
+    if (end < text.length) snip = snip + '…';
+    return snip;
+  }
+  return '';
+}
+
 function crmHandleSearch(query) {
   const resultsBox = document.getElementById('crmSearchResults');
   if (!resultsBox) return;
   const q = (query || '').trim().toLowerCase();
   if (q.length < 2) { resultsBox.style.display = 'none'; resultsBox.innerHTML = ''; return; }
-  // Match contacts first
-  const contactMatches = crmContacts.filter(c => {
-    const hay = [c.first_name, c.last_name, c.email, c.phone, c.zip, c.address].filter(Boolean).join(' ').toLowerCase();
-    return hay.includes(q);
-  }).slice(0, 10);
-  // Deal matches
+  // Match contacts first — using the comprehensive haystack so notes hit too.
+  const contactMatches = crmContacts.filter(c => crmContactHaystack(c).includes(q)).slice(0, 12);
+  // Deal matches (deals not already covered by a contact match)
   const dealMatches = crmDeals.filter(d => {
-    if (contactMatches.some(c => c.id === d.contact_id)) return false; // already shown via contact
+    if (contactMatches.some(c => c.id === d.contact_id)) return false;
     const contact = crmContacts.find(c => c.id === d.contact_id);
-    const hay = [d.name, contact && contact.email, contact && [contact.first_name, contact.last_name].filter(Boolean).join(' ')].filter(Boolean).join(' ').toLowerCase();
-    return hay.includes(q);
+    const parts = [
+      d.name,
+      contact && contact.email,
+      contact && [contact.first_name, contact.last_name].filter(Boolean).join(' '),
+      d.quote_data && d.quote_data.notes
+    ];
+    return parts.filter(Boolean).join(' ').toLowerCase().includes(q);
   }).slice(0, 10);
 
   if (!contactMatches.length && !dealMatches.length) {
@@ -6496,15 +6584,24 @@ function crmHandleSearch(query) {
     const sub = [c.email, c.phone].filter(Boolean).join(' · ');
     const firstDealId = deals[0] ? deals[0].id : null;
     const dealsLabel = deals.length === 0 ? 'No deals' : (deals.length === 1 ? '1 deal' : `${deals.length} deals`);
+    // Determine if the match was inside notes (vs. a structured field) and surface it.
+    const directHay = [c.first_name, c.last_name, c.email, c.phone, c.zip, c.address, c.city, c.state, c.lead_source].filter(Boolean).join(' ').toLowerCase();
+    const matchedDirectly = directHay.includes(q);
+    const snippet = matchedDirectly ? '' : crmFindMatchSnippet(c, q);
+    const snippetHTML = snippet
+      ? `<div style="font-size:10.5px;color:var(--yellow);margin-top:3px;line-height:1.4;font-style:italic">📝 ${escapeHTML(snippet)}</div>`
+      : '';
     if (firstDealId) {
       return `<div class="crm-search-row" onclick="crmPickSearchResult('${firstDealId}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)">
         <div style="font-size:13px;color:var(--white);font-weight:500">${escapeHTML(full)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHTML(sub || dealsLabel)}</div>
+        ${snippetHTML}
       </div>`;
     }
     return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);opacity:0.65">
       <div style="font-size:13px;color:var(--white)">${escapeHTML(full)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHTML(sub || '')} — No deals yet</div>
+      ${snippetHTML}
     </div>`;
   }).join('');
 
@@ -6513,9 +6610,22 @@ function crmHandleSearch(query) {
     const pipeline = crmPipelines.find(p => p.id === d.pipeline_id);
     const stage = crmStages.find(s => s.id === d.stage_id);
     const sub = [d.name, pipeline && pipeline.name, stage && stage.name].filter(Boolean).join(' · ');
+    // If the match was specifically in deal notes, surface it.
+    const dealNotes = d.quote_data && d.quote_data.notes;
+    const dealNotesIdx = dealNotes ? String(dealNotes).toLowerCase().indexOf(q) : -1;
+    let snippetHTML = '';
+    if (dealNotesIdx !== -1) {
+      const start = Math.max(0, dealNotesIdx - 30);
+      const end = Math.min(dealNotes.length, dealNotesIdx + q.length + 40);
+      let snip = dealNotes.slice(start, end).replace(/\s+/g, ' ').trim();
+      if (start > 0) snip = '…' + snip;
+      if (end < dealNotes.length) snip = snip + '…';
+      snippetHTML = `<div style="font-size:10.5px;color:var(--yellow);margin-top:3px;line-height:1.4;font-style:italic">📝 ${escapeHTML(snip)}</div>`;
+    }
     return `<div class="crm-search-row" onclick="crmPickSearchResult('${d.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)">
       <div style="font-size:13px;color:var(--white);font-weight:500">${escapeHTML(label)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHTML(sub)}</div>
+      ${snippetHTML}
     </div>`;
   }).join('');
 
