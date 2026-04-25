@@ -1001,6 +1001,132 @@
   .toast.error::before { content: '✗ '; color: var(--error); font-weight: 800; }
   @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
   /* ============ END SAVE LEAD FEATURE ============ */
+
+  /* ============================================================
+     MOBILE LAYOUT (Tier 3) — overrides desktop assumptions when
+     viewport is iPhone-sized (<= 720px). Targets the CRM
+     workspace + modals + pipeline + tasks + deal detail. Quote
+     tool already had narrow-screen rules above; this block
+     covers everything that was added later.
+     ============================================================ */
+  @media (max-width: 720px) {
+    /* App container — eat full width, not 700px boxed in */
+    .app { max-width: 100%; padding: 18px 12px 60px; }
+
+    /* Modals — full screen, no margin, easier thumb reach */
+    .modal-overlay { padding: 0; }
+    .modal,
+    .modal[style*="max-width"] { /* override inline max-width too */
+      max-width: 100% !important;
+      width: 100% !important;
+      max-height: 100vh;
+      min-height: 100vh;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+    }
+    .modal-header { padding: 14px 16px; }
+    .modal-title { font-size: 17px; }
+    .modal-sub { font-size: 12px; }
+    .modal-body { padding: 14px 16px; }
+    .modal-footer { padding: 12px 16px; gap: 8px; flex-wrap: wrap; }
+    .modal-footer .btn-primary,
+    .modal-footer .btn-ghost { flex: 1 1 auto; min-width: 110px; }
+
+    /* CRM workspace tab strip — let it scroll horizontally,
+       and pad inputs/buttons big enough for fingers */
+    .saved-leads-head-row {
+      padding: 0 12px 10px;
+      flex-wrap: nowrap !important;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .saved-leads-head-row > * { flex-shrink: 0; }
+    .saved-leads-head-row > div { /* the search input wrapper */
+      min-width: 180px !important;
+      max-width: 220px !important;
+    }
+    .settings-gear { padding: 8px 12px; font-size: 13px; }
+
+    /* Two-up grids → single column on phones */
+    .save-grid-2 { grid-template-columns: 1fr !important; gap: 10px !important; }
+
+    /* Pipeline kanban — stage columns stay 200px but the
+       horizontal scroll area gets touch momentum + edge fade
+       so users can swipe between stages */
+    .crm-stage-col { flex: 0 0 220px !important; }
+    [class*="card"] > div[style*="overflow-x:auto"] {
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+    }
+    .crm-stage-col { scroll-snap-align: start; }
+
+    /* Deal cards — bigger tap targets */
+    .crm-deal-card { padding: 12px !important; }
+    .crm-deal-card * { line-height: 1.35; }
+
+    /* Dashboard cards row — already auto-fit but tighten gaps */
+    .card { padding: 14px !important; }
+    .card-title { font-size: 15px !important; }
+
+    /* Task list rows — bigger checkbox tap targets */
+    input[type="checkbox"] { transform: scale(1.15); transform-origin: left center; }
+
+    /* Inputs — big enough that iOS doesn't auto-zoom on focus
+       (16px min font-size is the threshold) */
+    .input,
+    input.input,
+    select.input,
+    textarea.input { font-size: 16px !important; }
+
+    /* Form labels — slightly bigger so they don't disappear */
+    .label { font-size: 12px; }
+
+    /* Toast — pin to bottom, not center, so it doesn't cover
+       the field the user just edited */
+    .toast {
+      bottom: 16px !important;
+      top: auto !important;
+      transform: translateX(-50%) !important;
+      max-width: calc(100% - 32px);
+      font-size: 13px;
+    }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+    /* Renewals + Commissions tab — bucket cards stack vertically */
+    div[style*="grid-template-columns:repeat(auto-fit"] {
+      grid-template-columns: 1fr !important;
+    }
+
+    /* Search results dropdown inside the CRM tab strip — reposition
+       so it doesn't get cut off by the horizontal-scrolling parent */
+    #crmSearchResults {
+      position: fixed !important;
+      left: 12px !important;
+      right: 12px !important;
+      top: auto !important;
+    }
+
+    /* Close button bigger so it's reachable with thumb */
+    .modal-close { width: 40px; height: 40px; font-size: 28px; }
+
+    /* Quote tool roster rows — stack so age/gender/remove don't
+       overflow on narrow screens */
+    .person-row {
+      grid-template-columns: 1fr !important;
+      gap: 6px !important;
+    }
+    .person-row .role-tag { justify-self: start; }
+    .person-row .btn-remove { justify-self: end; }
+
+    /* Plans-modal table — let it scroll horizontally instead of
+       breaking the layout */
+    .plans-modal table,
+    .rate-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* Attachment dropzone — bigger tap area */
+    [id^="dd_attach_dropzone_"] { padding: 22px 14px !important; }
+  }
 </style>
 </head>
 <body>
@@ -2264,6 +2390,7 @@ const STATE_BASED_EXCHANGES = {
   CO: { name: 'Connect for Health Colorado',       url: 'https://connectforhealthco.com/' },
   CT: { name: 'Access Health CT',                  url: 'https://www.accesshealthct.com/' },
   DC: { name: 'DC Health Link',                    url: 'https://www.dchealthlink.com/' },
+  GA: { name: 'Georgia Access',                    url: 'https://georgiaaccess.gov/' },
   ID: { name: 'Your Health Idaho',                 url: 'https://www.yourhealthidaho.org/' },
   KY: { name: 'kynect',                            url: 'https://kynect.ky.gov/' },
   ME: { name: 'CoverME.gov',                       url: 'https://www.coverme.gov/' },
@@ -3938,6 +4065,27 @@ async function loadCRMData() {
   crmTasks = await safeTableSelect('tasks', q => q.order('due_date', { ascending: true }));
   crmActivities = await safeTableSelect('activities', q => q.order('occurred_at', { ascending: false }));
   crmPolicies = await safeTableSelect('policies', q => q.order('effective_date', { ascending: false }));
+
+  // Tier 3 auto-task scan — idempotent, runs once per session after first
+  // successful data load. Creates renewal / birthday / anniversary tasks on
+  // schedule. We gate with __autoScanRan so subsequent loadCRMData() calls
+  // (after every save) don't keep re-scanning.
+  if (!window.__autoScanRan) {
+    window.__autoScanRan = true;
+    // Fire-and-forget — don't block UI render. If anything is created, show a toast.
+    runAutoTaskScans().then(summary => {
+      if (summary && summary.total > 0) {
+        const bits = [];
+        if (summary.renewalsAdded) bits.push(`${summary.renewalsAdded} renewal`);
+        if (summary.birthdaysAdded) bits.push(`${summary.birthdaysAdded} birthday`);
+        if (summary.anniversariesAdded) bits.push(`${summary.anniversariesAdded} anniversary`);
+        showToast(`Auto-created ${summary.total} task${summary.total===1?'':'s'} (${bits.join(', ')})`, 'success');
+        // Re-render dashboard or tasks tab if either is currently visible.
+        if (crmActiveTab === 'tasks') renderCRMTasks();
+        else if (crmActiveTab === 'dashboard') renderCRMDashboard();
+      }
+    });
+  }
 }
 
 // Safely select a table — returns [] if the table doesn't exist yet (pre-migration).
@@ -3978,6 +4126,554 @@ function formatDealDate(iso) {
     const d = new Date(iso);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch (e) { return ''; }
+}
+
+// ---------- EMAIL TEMPLATES (Tier 3) ----------
+// Pre-written, variable-substituted email drafts. Click a template inside a
+// deal → the contact's data is substituted in → Gmail's compose URL is opened
+// in a new tab with subject+body prefilled. We don't use the Gmail API here,
+// so no extra OAuth scopes are required — Emanuel reviews every email before
+// hitting Send, which is the right default for client comms anyway.
+
+const BROKER_INFO = {
+  name: 'Emanuel Greco',
+  phone: '(813) 203-2245',
+  email: 'coveredbygreco@gmail.com',
+  signoff: 'Talk soon,\nEmanuel'
+};
+
+const EMAIL_TEMPLATES = [
+  {
+    id: 'first_quote',
+    name: 'Quote sent — let\'s chat',
+    when: 'After generating a quote for a new lead',
+    subject: 'Your health insurance quote — quick recap',
+    body:
+`Hi {{firstName}},
+
+Thanks for reaching out about health coverage. Here's what we put together for you:
+
+• Plan ranges quoted: ACA marketplace plans starting around your area
+• Best next step: a 10-minute call to walk through the options and answer any questions
+
+I'd love to find a quick time to connect — feel free to reply with what works, or text me directly at {{brokerPhone}}. There's no pressure and absolutely no obligation.
+
+{{signoff}}
+{{brokerName}} — Licensed Health Insurance Broker
+{{brokerPhone}} | {{brokerEmail}}`
+  },
+  {
+    id: 'follow_up_no_response',
+    name: 'Follow-up — no response',
+    when: 'A few days after first contact with no reply',
+    subject: 'Just bumping this up, {{firstName}}',
+    body:
+`Hi {{firstName}},
+
+Just wanted to make sure my last email didn't get lost in your inbox. I've still got your quote pulled up and would love to walk through it with you whenever it's convenient.
+
+If now's not a good time, just reply with a date that works better — even a quick "next month" is fine. No rush, just want to make sure you have the right coverage in place.
+
+{{signoff}}
+{{brokerName}}
+{{brokerPhone}}`
+  },
+  {
+    id: 'missed_call',
+    name: 'Sorry I missed you',
+    when: 'Right after a missed call',
+    subject: 'Tried calling — when works for you?',
+    body:
+`Hi {{firstName}},
+
+Just tried giving you a quick call about your insurance — sorry I missed you. Whenever you have 5–10 minutes, give me a ring back at {{brokerPhone}} or reply here with a time and I'll call you.
+
+{{signoff}}
+{{brokerName}}`
+  },
+  {
+    id: 'enrollment_confirmation',
+    name: 'You\'re enrolled — what to expect',
+    when: 'After a client successfully enrolls',
+    subject: 'Welcome aboard, {{firstName}} — here\'s what happens next',
+    body:
+`Hi {{firstName}},
+
+Great news — your enrollment with {{policyCarrier}} is confirmed. Here's what to expect over the next couple weeks:
+
+1. You'll get a welcome packet from {{policyCarrier}} (usually 7–14 days) with your member ID card and plan details.
+2. Your first premium is due before coverage starts — most carriers email you directly with payment instructions.
+3. Coverage starts on the 1st of your effective month.
+
+Save my number — {{brokerPhone}} — for any questions about claims, coverage, or anything else. I'm here year-round, not just during enrollment.
+
+{{signoff}}
+{{brokerName}} — your broker for life`
+  },
+  {
+    id: 'renewal_reminder',
+    name: 'Renewal reminder',
+    when: '30+ days before policy renewal',
+    subject: 'Your {{policyCarrier}} renewal is coming up',
+    body:
+`Hi {{firstName}},
+
+Heads up — your health plan with {{policyCarrier}} is up for renewal soon (renewal date: {{policyRenewalDate}}). I'll be doing a quick re-shop on your behalf to make sure you're still in the best plan for your situation.
+
+Two quick questions to make sure I quote the right thing:
+1. Has anything changed about your household or income this year?
+2. Any new prescriptions or doctors you'd want to make sure are still covered?
+
+Reply when you have a sec and I'll have updated options ready for you.
+
+{{signoff}}
+{{brokerName}}
+{{brokerPhone}}`
+  },
+  {
+    id: 'birthday',
+    name: 'Birthday greeting',
+    when: 'On a client\'s birthday',
+    subject: 'Happy birthday, {{firstName}}!',
+    body:
+`Happy birthday, {{firstName}}!
+
+Hope you have a great day. Just wanted to send a quick hello and remind you that I'm always here if you need anything insurance-related — claims, coverage questions, or just a sanity check on a bill.
+
+{{signoff}}
+{{brokerName}}`
+  },
+  {
+    id: 'aor_request',
+    name: 'Agent of Record (AOR) request',
+    when: 'Taking over an existing client from another broker',
+    subject: 'Quick form to make me your broker on record',
+    body:
+`Hi {{firstName}},
+
+Thanks for trusting me with your health insurance going forward. To officially make me your Agent of Record (AOR) with {{policyCarrier}}, I'll need you to sign a quick one-page authorization form — takes about 30 seconds.
+
+I'll send the form via DocuSign as soon as you reply confirming you'd like to proceed. No cost to you, and you can revoke it anytime.
+
+{{signoff}}
+{{brokerName}}
+{{brokerPhone}}`
+  },
+  {
+    id: 'document_request',
+    name: 'Document request',
+    when: 'Need driver\'s license / income proof / etc.',
+    subject: 'Couple of documents I need from you',
+    body:
+`Hi {{firstName}},
+
+To wrap up your enrollment, I'll need a few documents from you:
+
+• [ ] Government-issued photo ID (driver's license is fine)
+• [ ] Proof of income (most recent paystub or last year's tax return)
+• [ ] [anything else specific to this client]
+
+Easiest is to snap photos with your phone and reply to this email — I'll handle the rest. Let me know if any of these are tough to get and we can talk through alternatives.
+
+{{signoff}}
+{{brokerName}}`
+  }
+];
+
+// Apply {{var}} substitution. Unknown vars are left blank, not literal.
+function applyEmailTemplateVars(text, ctx) {
+  return String(text || '').replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    return ctx[key] != null ? String(ctx[key]) : '';
+  });
+}
+
+// Build the substitution context from a deal + contact + (optional) policy.
+function buildEmailTemplateContext(deal, contact, policy) {
+  const firstName = (contact && contact.first_name) || '';
+  const lastName = (contact && contact.last_name) || '';
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  const policyMonthlyPremium = policy && policy.monthly_premium != null
+    ? '$' + Number(policy.monthly_premium).toFixed(2) + '/mo'
+    : '';
+  const policyRenewalDate = policy && policy.renewal_date
+    ? parseLocalDate(policy.renewal_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  return {
+    firstName, lastName, fullName,
+    phone: (contact && contact.phone) || '',
+    email: (contact && contact.email) || '',
+    policyCarrier: (policy && policy.carrier) || 'your carrier',
+    policyPlanName: (policy && policy.plan_name) || '',
+    policyMonthlyPremium,
+    policyRenewalDate: policyRenewalDate || 'soon',
+    brokerName: BROKER_INFO.name,
+    brokerPhone: BROKER_INFO.phone,
+    brokerEmail: BROKER_INFO.email,
+    signoff: BROKER_INFO.signoff,
+    today: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  };
+}
+
+// Render the template-picker modal for a deal. Lists every template, shows
+// the rendered subject + body for the currently-focused one, and opens Gmail
+// compose on click.
+function openEmailTemplatesForDeal(dealId) {
+  const deal = crmDeals.find(d => d.id === dealId);
+  if (!deal) { showToast('Deal not found', 'error'); return; }
+  const contact = crmContacts.find(c => c.id === deal.contact_id) || null;
+  // Pick the most recent active policy on this contact (if any).
+  const policies = (crmPolicies || []).filter(p => p.contact_id === deal.contact_id);
+  const policy = policies.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0] || null;
+  const ctx = buildEmailTemplateContext(deal, contact, policy);
+
+  const items = EMAIL_TEMPLATES.map((t, idx) => `
+    <div onclick="previewEmailTemplate(${idx})" id="emailTplRow_${idx}"
+         style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;background:rgba(255,255,255,0.02)">
+      <div style="font-size:13px;color:var(--white);font-weight:600">${escapeHTML(t.name)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHTML(t.when)}</div>
+    </div>
+  `).join('');
+
+  // Stash on window for the preview/send handlers.
+  window.__emailTplCtx = ctx;
+  window.__emailTplDealId = dealId;
+  window.__emailTplContact = contact;
+
+  const modal = document.getElementById('emailTplModal');
+  if (!modal) {
+    // Build the modal once and append to body.
+    const overlay = document.createElement('div');
+    overlay.id = 'emailTplModal';
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:820px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Send email — pick a template</div>
+            <div class="modal-sub" id="emailTplSub">Variables auto-fill from the contact</div>
+          </div>
+          <button class="modal-close" onclick="closeEmailTemplates()">×</button>
+        </div>
+        <div class="modal-body" style="padding:0">
+          <div style="display:grid;grid-template-columns:280px 1fr;min-height:400px">
+            <div style="border-right:1px solid var(--border);padding:14px;overflow-y:auto;max-height:60vh" id="emailTplList"></div>
+            <div style="padding:14px;overflow-y:auto;max-height:60vh" id="emailTplPreview">
+              <div style="font-size:12.5px;color:var(--muted);text-align:center;padding:30px 10px">Pick a template on the left to preview.</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <div style="flex:1;font-size:11px;color:var(--muted)">Opens in your Gmail tab — review before sending.</div>
+          <button class="btn-ghost" onclick="closeEmailTemplates()">Cancel</button>
+          <button class="btn-primary" id="emailTplSendBtn" disabled
+                  style="width:auto;padding:10px 20px;margin-top:0;opacity:0.5"
+                  onclick="composeSelectedTemplateInGmail()">Open in Gmail</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  } else {
+    modal.style.display = 'flex';
+  }
+
+  // Populate (or re-populate) the list, since the deal changed.
+  document.getElementById('emailTplList').innerHTML = items;
+  document.getElementById('emailTplPreview').innerHTML =
+    '<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:30px 10px">Pick a template on the left to preview.</div>';
+  const btn = document.getElementById('emailTplSendBtn');
+  btn.disabled = true; btn.style.opacity = '0.5';
+  window.__emailTplPicked = null;
+
+  // Subhead — show whose email it'd go to.
+  const sub = document.getElementById('emailTplSub');
+  const recipientLabel = (contact && contact.email)
+    ? `→ ${contact.email}`
+    : (contact ? '⚠ No email on file — add one before sending' : '⚠ No contact linked');
+  sub.textContent = recipientLabel;
+}
+
+function closeEmailTemplates() {
+  const m = document.getElementById('emailTplModal');
+  if (m) m.style.display = 'none';
+  window.__emailTplPicked = null;
+}
+
+function previewEmailTemplate(idx) {
+  const t = EMAIL_TEMPLATES[idx];
+  if (!t) return;
+  const ctx = window.__emailTplCtx || {};
+  const subject = applyEmailTemplateVars(t.subject, ctx);
+  const body = applyEmailTemplateVars(t.body, ctx);
+  // Highlight selected row
+  document.querySelectorAll('[id^="emailTplRow_"]').forEach(el => {
+    el.style.borderColor = 'var(--border)';
+    el.style.background = 'rgba(255,255,255,0.02)';
+  });
+  const row = document.getElementById('emailTplRow_' + idx);
+  if (row) { row.style.borderColor = 'var(--yellow)'; row.style.background = 'rgba(253,199,47,0.06)'; }
+
+  document.getElementById('emailTplPreview').innerHTML = `
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Subject</div>
+    <div style="font-size:14px;color:var(--white);font-weight:600;margin-bottom:14px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:6px;border:1px solid var(--border)">${escapeHTML(subject)}</div>
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Body</div>
+    <pre style="font-family:inherit;white-space:pre-wrap;word-wrap:break-word;font-size:13px;color:var(--text);line-height:1.55;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:12px;margin:0">${escapeHTML(body)}</pre>
+  `;
+  window.__emailTplPicked = { idx, subject, body };
+  const btn = document.getElementById('emailTplSendBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+}
+
+function composeSelectedTemplateInGmail() {
+  const picked = window.__emailTplPicked;
+  if (!picked) { showToast('Pick a template first', 'error'); return; }
+  const contact = window.__emailTplContact;
+  const dealId = window.__emailTplDealId;
+  if (!contact || !contact.email) {
+    showToast('Add an email to this contact first', 'error');
+    return;
+  }
+  // Gmail compose URL opens a new compose window in the user's Gmail tab,
+  // pre-filled. They review + click Send. We don't auto-send anything.
+  const url = 'https://mail.google.com/mail/?view=cm&fs=1'
+    + '&to=' + encodeURIComponent(contact.email)
+    + '&su=' + encodeURIComponent(picked.subject)
+    + '&body=' + encodeURIComponent(picked.body);
+  window.open(url, '_blank', 'noopener');
+  // Best-effort: log it as an activity on the deal so we have a paper trail.
+  try {
+    if (typeof logActivity === 'function' && dealId) {
+      const t = EMAIL_TEMPLATES[picked.idx];
+      logActivity(dealId, 'email', `Sent template "${t.name}" → ${contact.email}`, contact.id);
+    }
+  } catch (_) {}
+  closeEmailTemplates();
+  showToast('Opened Gmail with your draft.', 'success');
+}
+
+// ---------- AUTO-CREATED TASKS (Tier 3) ----------
+// Once per session, after the CRM data loads, scan for:
+//   • Policies whose renewal_date is in the next 60 days that don't have an
+//     associated renewal task yet → auto-create one.
+//   • Contacts with a DOB whose birthday is in the next 7 days, with no
+//     birthday task already → auto-create one.
+//   • Clients (contacts on a Won deal) whose `created_at` anniversary is in
+//     the next 7 days, with no anniversary task already → auto-create one.
+// All auto-tasks are tagged with description prefixes so we can dedup them
+// idempotently on every load — running this twice produces zero duplicates.
+
+const AUTO_TASK_TAG = '[auto]';
+const AUTO_RENEWAL_PREFIX = AUTO_TASK_TAG + ' Renewal —';
+const AUTO_BIRTHDAY_PREFIX = AUTO_TASK_TAG + ' Birthday —';
+const AUTO_ANNIVERSARY_PREFIX = AUTO_TASK_TAG + ' Client anniversary —';
+
+// Compute "today" + N days as a YYYY-MM-DD local date.
+function localDatePlusDays(days) {
+  const d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + days);
+  return toLocalISODate(d);
+}
+
+// True if a contact has any open auto-task whose title starts with `prefix`
+// AND whose due_date matches `iso`. We match BOTH so a 2026 birthday task
+// doesn't suppress a 2027 one.
+function hasOpenAutoTask(contactId, policyId, prefix, dueIso) {
+  return crmTasks.some(t => {
+    if (t.completed) return false;
+    if (!t.title || !t.title.startsWith(prefix)) return false;
+    if (policyId != null && t.policy_id !== policyId) return false;
+    if (policyId == null && contactId != null && t.contact_id !== contactId) return false;
+    return t.due_date === dueIso;
+  });
+}
+
+// Insert a single auto-task. Returns the inserted row or null on error.
+async function insertAutoTask(row) {
+  try {
+    const { data, error } = await crmClient.from('tasks').insert({
+      ...row,
+      owner_id: crmUser.id,
+      priority: row.priority || 'normal'
+    }).select().maybeSingle();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.warn('[AutoTask] insert failed', err);
+    return null;
+  }
+}
+
+async function autoCreateRenewalTasks() {
+  if (!Array.isArray(crmPolicies) || !crmPolicies.length) return 0;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const sixtyOut = new Date(now); sixtyOut.setDate(now.getDate() + 60);
+  let created = 0;
+  for (const p of crmPolicies) {
+    if (!p.renewal_date) continue;
+    const renewal = parseLocalDate(p.renewal_date);
+    if (!renewal) continue;
+    if (renewal < now || renewal > sixtyOut) continue;
+    // Task is due 30 days before renewal (clamped to today if already < 30).
+    const taskDate = new Date(renewal); taskDate.setDate(taskDate.getDate() - 30);
+    const dueIso = (taskDate < now) ? toLocalISODate(now) : toLocalISODate(taskDate);
+    const contact = crmContacts.find(c => c.id === p.contact_id);
+    const contactName = contact
+      ? ([contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'client')
+      : 'client';
+    const carrier = p.carrier || 'policy';
+    const title = `${AUTO_RENEWAL_PREFIX} ${contactName} (${carrier})`;
+    if (hasOpenAutoTask(p.contact_id, p.id, AUTO_RENEWAL_PREFIX, dueIso)) continue;
+    const ok = await insertAutoTask({
+      title,
+      due_date: dueIso,
+      contact_id: p.contact_id || null,
+      policy_id: p.id,
+      description: `Auto-created. Policy renews on ${p.renewal_date}.\nCheck plan options, confirm subsidy eligibility, quote alternatives if needed.`
+    });
+    if (ok) created++;
+  }
+  return created;
+}
+
+// Compute the next-occurring birthday from a YYYY-MM-DD DOB, anchored to
+// today. If their birthday is later this year, returns this year's date;
+// if it's already passed, returns next year's. Returns YYYY-MM-DD.
+function nextBirthdayISO(dobStr) {
+  const dob = parseLocalDate(dobStr);
+  if (!dob) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const candidate = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+  if (candidate < today) candidate.setFullYear(today.getFullYear() + 1);
+  return toLocalISODate(candidate);
+}
+
+async function autoCreateBirthdayTasks() {
+  if (!Array.isArray(crmContacts) || !crmContacts.length) return 0;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const sevenOut = new Date(now); sevenOut.setDate(now.getDate() + 7);
+  let created = 0;
+  for (const c of crmContacts) {
+    if (!c.dob) continue;
+    const nextBday = nextBirthdayISO(c.dob);
+    if (!nextBday) continue;
+    const bday = parseLocalDate(nextBday);
+    if (!bday || bday > sevenOut) continue;
+    const dueIso = nextBday;
+    const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || 'client';
+    const title = `${AUTO_BIRTHDAY_PREFIX} ${name}`;
+    if (hasOpenAutoTask(c.id, null, AUTO_BIRTHDAY_PREFIX, dueIso)) continue;
+    const ok = await insertAutoTask({
+      title,
+      due_date: dueIso,
+      contact_id: c.id,
+      description: 'Auto-created. Send a birthday text or email — even a one-liner. Use the "Birthday greeting" email template if you need a starting point.'
+    });
+    if (ok) created++;
+  }
+  return created;
+}
+
+async function autoCreateAnniversaryTasks() {
+  if (!Array.isArray(crmDeals) || !crmDeals.length) return 0;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const sevenOut = new Date(now); sevenOut.setDate(now.getDate() + 7);
+  // Anniversary = annual return of the contact's first Won deal's created_at.
+  // Build a dedup map: contact_id → earliest Won deal created_at.
+  const wonStages = new Set(crmStages.filter(s => s.is_won).map(s => s.id));
+  const earliestWonByContact = new Map();
+  for (const d of crmDeals) {
+    if (!wonStages.has(d.stage_id)) continue;
+    if (!d.contact_id || !d.created_at) continue;
+    const prev = earliestWonByContact.get(d.contact_id);
+    if (!prev || (d.created_at < prev)) earliestWonByContact.set(d.contact_id, d.created_at);
+  }
+  let created = 0;
+  for (const [contactId, firstWonISO] of earliestWonByContact) {
+    const firstWon = new Date(firstWonISO);
+    if (isNaN(firstWon.getTime())) continue;
+    // Compute the next-occurring anniversary.
+    const candidate = new Date(now.getFullYear(), firstWon.getMonth(), firstWon.getDate());
+    if (candidate < now) candidate.setFullYear(now.getFullYear() + 1);
+    if (candidate > sevenOut) continue;
+    // Skip the 0th anniversary (same year as won).
+    if (candidate.getFullYear() === firstWon.getFullYear()) continue;
+    const yearsAsClient = candidate.getFullYear() - firstWon.getFullYear();
+    const dueIso = toLocalISODate(candidate);
+    const contact = crmContacts.find(c => c.id === contactId);
+    if (!contact) continue;
+    const name = [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'client';
+    const title = `${AUTO_ANNIVERSARY_PREFIX} ${name} (${yearsAsClient}yr)`;
+    if (hasOpenAutoTask(contactId, null, AUTO_ANNIVERSARY_PREFIX, dueIso)) continue;
+    const ok = await insertAutoTask({
+      title,
+      due_date: dueIso,
+      contact_id: contactId,
+      description: `Auto-created. ${name} has been a client for ${yearsAsClient} year${yearsAsClient===1?'':'s'} as of ${dueIso}. Send a quick thank-you note.`
+    });
+    if (ok) created++;
+  }
+  return created;
+}
+
+// Run all three auto-creators. Idempotent — re-running never duplicates.
+// Returns a summary object so the caller can show a toast.
+async function runAutoTaskScans() {
+  if (!crmClient || !crmUser) return null;
+  // Make sure tasks list is current before we scan for dedup.
+  try {
+    const renewalsAdded = await autoCreateRenewalTasks();
+    const birthdaysAdded = await autoCreateBirthdayTasks();
+    const anniversariesAdded = await autoCreateAnniversaryTasks();
+    const total = renewalsAdded + birthdaysAdded + anniversariesAdded;
+    if (total > 0) {
+      // Refresh tasks list so the UI reflects what we just inserted.
+      crmTasks = await safeTableSelect('tasks', q => q.order('due_date', { ascending: true }));
+      try { updateCRMTaskBadge(); } catch (_) {}
+    }
+    return { renewalsAdded, birthdaysAdded, anniversariesAdded, total };
+  } catch (err) {
+    console.warn('[AutoTask] scan failed', err);
+    return null;
+  }
+}
+
+// ---------- BIRTHDAYS-THIS-MONTH WIDGET (Tier 3) ----------
+// Renders a list of contacts whose birthday is in the current month, sorted
+// by day, used on the dashboard. Shows age they're turning.
+function renderBirthdaysThisMonth() {
+  if (!Array.isArray(crmContacts) || !crmContacts.length) return '';
+  const now = new Date();
+  const month = now.getMonth();
+  const today = now.getDate();
+  const items = crmContacts
+    .filter(c => c.dob)
+    .map(c => {
+      const dob = parseLocalDate(c.dob);
+      if (!dob) return null;
+      if (dob.getMonth() !== month) return null;
+      const age = now.getFullYear() - dob.getFullYear();
+      return {
+        name: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || 'Unnamed',
+        day: dob.getDate(),
+        turning: age,
+        contactId: c.id,
+        isPast: dob.getDate() < today
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.day - b.day);
+  if (!items.length) {
+    return '<div style="font-size:11.5px;color:var(--muted);padding:6px 0">No client birthdays this month.</div>';
+  }
+  return items.map(it => {
+    const monthName = now.toLocaleDateString('en-US', { month: 'short' });
+    const dateLabel = `${monthName} ${it.day}`;
+    const dim = it.isPast ? 'opacity:0.45;text-decoration:line-through' : '';
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);${dim}">
+        <span style="font-size:12.5px;color:var(--white)">${escapeHTML(it.name)}</span>
+        <span style="font-size:11px;color:var(--muted)">${dateLabel} · turning ${it.turning}</span>
+      </div>`;
+  }).join('');
 }
 
 // ------- Deal-scoped renderers for Tier 1 features -------
@@ -4326,19 +5022,25 @@ function renderCRMDashboard() {
           <div style="font-size:28px;font-family:'Playfair Display',serif;color:var(--muted)">${totalDeals}</div>
         </div>
       </div>
-      ${pipCount ? `
-      <div class="card" style="margin-bottom:0">
-        <div class="card-title" style="margin-bottom:12px">Deals by Pipeline</div>
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="border-bottom:1px solid var(--border)">
-              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Pipeline</th>
-              <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Deals</th>
-            </tr>
-          </thead>
-          <tbody>${pipelineRows}</tbody>
-        </table>
-      </div>` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:0;align-items:start">
+        ${pipCount ? `
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title" style="margin-bottom:12px">Deals by Pipeline</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Pipeline</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Deals</th>
+              </tr>
+            </thead>
+            <tbody>${pipelineRows}</tbody>
+          </table>
+        </div>` : '<div></div>'}
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title" style="margin-bottom:12px">🎂 Birthdays this month</div>
+          ${renderBirthdaysThisMonth()}
+        </div>
+      </div>
     </div>`;
 }
 
@@ -4421,6 +5123,7 @@ document.addEventListener('click', (e) => {
   if (e.target && e.target.id === 'crmWorkspaceModal') closeCRM();
   if (e.target && e.target.id === 'crmChangePasswordModal') closeCRMChangePassword();
   if (e.target && e.target.id === 'crmImportModal')   closeCRMImport();
+  if (e.target && e.target.id === 'emailTplModal')    closeEmailTemplates();
 });
 
 // Boot the client on page load (no auth side effects if not signed in)
@@ -4948,6 +5651,12 @@ function openDealDetail(dealId) {
         <div style="font-size:11px;color:var(--muted);margin-top:4px" id="dd_notes_meta">${qd.notes_updated_at ? 'Last updated ' + formatDealDate(qd.notes_updated_at) : 'Tip: click Save Changes to persist your notes.'}</div>
       `)}
       ${section('Attachments', renderAttachmentsForDeal(deal))}
+      ${section('Send Email', `
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn-primary" style="width:auto;padding:9px 16px;margin-top:0" onclick="openEmailTemplatesForDeal('${deal.id}')">📧 Use template</button>
+          <span style="font-size:11.5px;color:var(--muted)">Picks one of 8 pre-written templates, fills in the contact, opens Gmail in a new tab for review &amp; send.</span>
+        </div>
+      `)}
       ${section('Tasks & Follow-ups', renderTasksForDeal(deal))}
       ${section('Activity Timeline', renderActivitiesForDeal(deal))}
       ${section('Policies', renderPoliciesForContact(deal.contact_id))}
@@ -6075,13 +6784,15 @@ function renderCRMRenewals() {
       const taskBtn = hasTask
         ? `<span style="color:var(--success);font-size:11px">✓ Task set</span>`
         : `<button class="btn-ghost" style="padding:4px 10px;font-size:11px;width:auto;margin:0" onclick="event.stopPropagation();createRenewalTask('${p.id}')">+ Task</button>`;
+      const requoteBtn = `<button class="btn-ghost" style="padding:4px 10px;font-size:11px;width:auto;margin:0;margin-left:6px" onclick="event.stopPropagation();requotePolicyInTool('${p.id}')" title="Pre-fill the quote tool with this client's info">↻ Re-quote</button>`;
+      const draftEmailBtn = `<button class="btn-ghost" style="padding:4px 10px;font-size:11px;width:auto;margin:0;margin-left:6px" onclick="event.stopPropagation();draftRenewalEmail('${p.id}')" title="Open Gmail compose with the renewal-reminder template prefilled">📧 Draft email</button>`;
       return `
         <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openPolicyModal('${p.contact_id}','${p.id}')">
           <td style="padding:8px 10px">${escapeHTML(name)}</td>
           <td style="padding:8px 10px">${escapeHTML(p.carrier || '')} ${p.plan_name ? '<span style="color:var(--muted);font-size:11px">· ' + escapeHTML(p.plan_name) + '</span>' : ''}</td>
           <td style="padding:8px 10px">${escapeHTML(p.renewal_date)}</td>
           <td style="padding:8px 10px;font-size:11px;color:var(--muted)">${daysLabel}</td>
-          <td style="padding:8px 10px;text-align:right">${taskBtn}</td>
+          <td style="padding:8px 10px;text-align:right;white-space:nowrap">${taskBtn}${requoteBtn}${draftEmailBtn}</td>
         </tr>`;
     }).join('');
     return `
@@ -6199,6 +6910,82 @@ async function createRenewalTask(policyId) {
   } catch (e) {
     showToast('Could not create task: ' + (e.message || e), 'error');
   }
+}
+
+// Pre-fill the quote tool with a contact's last-known household data so
+// Emanuel can re-shop a renewal without retyping. Closes the CRM modal
+// and scrolls to the top so the form is visible.
+function requotePolicyInTool(policyId) {
+  const policy = crmPolicies.find(p => p.id === policyId);
+  if (!policy) { showToast('Policy not found', 'error'); return; }
+  const contact = crmContacts.find(c => c.id === policy.contact_id);
+  if (!contact) { showToast('Contact not found', 'error'); return; }
+  // Try to find the most recent deal for this contact — its quote_data will
+  // have the original household roster.
+  const deal = (crmDeals || [])
+    .filter(d => d.contact_id === contact.id)
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+  const qd = (deal && deal.quote_data) || {};
+  // Close the CRM workspace.
+  closeCRM();
+  // Pre-fill the quote-tool top form.
+  try {
+    const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(' ').trim();
+    if (fullName) document.getElementById('clientName').value = fullName;
+    if (contact.zip) document.getElementById('zipCode').value = contact.zip;
+    if (contact.annual_income != null) {
+      document.getElementById('income').value = String(contact.annual_income);
+    } else if (qd.income != null) {
+      document.getElementById('income').value = String(qd.income);
+    }
+    // Self age — derive from DOB if available, else use the saved roster's first person.
+    const selfRow = document.querySelector('.person-row[data-role="Self"]');
+    if (selfRow) {
+      const ageInput = selfRow.querySelector('.person-age');
+      if (ageInput) {
+        if (contact.dob) {
+          // Flip Self to DOB mode so the actual DOB is preserved (drives age).
+          const dobRadio = selfRow.querySelector('input[type="radio"][value="dob"]');
+          if (dobRadio) { dobRadio.checked = true; if (typeof switchAgeMode === 'function') switchAgeMode(dobRadio); }
+          ageInput.value = contact.dob;
+        } else if (qd.people && qd.people[0] && qd.people[0].age) {
+          ageInput.value = qd.people[0].age;
+        }
+        if (typeof autofillPPO === 'function') autofillPPO();
+      }
+    }
+  } catch (err) { console.warn('[Re-quote] prefill error', err); }
+  // Scroll to the form so it's obvious the fields got populated.
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showToast('Pre-filled with ' + (contact.first_name || 'client') + '. Click Get ACA Plans when ready.', 'success');
+}
+
+// Open Gmail compose with the renewal-reminder template prefilled for this
+// policy's contact. Skips the template-picker modal — direct shortcut.
+function draftRenewalEmail(policyId) {
+  const policy = crmPolicies.find(p => p.id === policyId);
+  if (!policy) { showToast('Policy not found', 'error'); return; }
+  const contact = crmContacts.find(c => c.id === policy.contact_id);
+  if (!contact) { showToast('Contact not found', 'error'); return; }
+  if (!contact.email) { showToast('Add an email to ' + (contact.first_name || 'this contact') + ' first', 'error'); return; }
+  const tpl = EMAIL_TEMPLATES.find(t => t.id === 'renewal_reminder');
+  if (!tpl) { showToast('Template missing', 'error'); return; }
+  const fakeDeal = (crmDeals || []).find(d => d.contact_id === contact.id) || { id: null };
+  const ctx = buildEmailTemplateContext(fakeDeal, contact, policy);
+  const subject = applyEmailTemplateVars(tpl.subject, ctx);
+  const body = applyEmailTemplateVars(tpl.body, ctx);
+  const url = 'https://mail.google.com/mail/?view=cm&fs=1'
+    + '&to=' + encodeURIComponent(contact.email)
+    + '&su=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(body);
+  window.open(url, '_blank', 'noopener');
+  // Log on whatever deal we associated.
+  try {
+    if (typeof logActivity === 'function' && fakeDeal.id) {
+      logActivity(fakeDeal.id, 'email', `Drafted renewal email → ${contact.email}`, contact.id);
+    }
+  } catch (_) {}
+  showToast('Renewal email drafted in Gmail.', 'success');
 }
 
 // Bulk: create tasks for every policy in a renewal bucket

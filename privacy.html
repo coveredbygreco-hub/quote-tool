@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Covered by Greco</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0A0E1A; color: #f8f9fa; max-width: 760px; margin: 0 auto; padding: 40px 24px 80px; line-height: 1.6; }
+  h1 { color: #FDC72F; font-size: 32px; margin-bottom: 4px; }
+  h2 { color: #FDC72F; font-size: 20px; margin-top: 32px; margin-bottom: 8px; }
+  .sub { color: #8a93a8; font-size: 14px; margin-bottom: 32px; }
+  a { color: #FDC72F; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .contact { background: rgba(253,199,47,0.08); border-left: 3px solid #FDC72F; padding: 16px 20px; border-radius: 6px; margin-top: 32px; }
+</style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <div class="sub">Covered by Greco — Quote Tool &amp; CRM. Last updated: April 25, 2026.</div>
+
+  <p>Covered by Greco is operated by Emanuel Greco, an independent licensed health insurance broker. This page describes how the Quote Tool &amp; CRM web application (the &ldquo;Service&rdquo;) handles personal data.</p>
+
+  <h2>1. Who this policy covers</h2>
+  <p>The Service is used internally by Emanuel Greco and authorized assistants to quote ACA health plans and manage client relationships. End-clients of the brokerage are not direct users of the Service — they receive quotes and policy documents through standard channels (email, SMS, phone) and their information is entered into the Service by Emanuel on their behalf.</p>
+
+  <h2>2. Information we collect</h2>
+  <ul>
+    <li><strong>Client information you enter into the CRM:</strong> name, contact details (phone, email, address, ZIP), date of birth, household income, lead source, notes, and uploaded documents.</li>
+    <li><strong>Quote data:</strong> ZIP code lookups, household composition, and ACA plan results returned by the federal Marketplace API.</li>
+    <li><strong>Google account data (optional):</strong> if you choose to connect Google, the Service requests read &amp; write access to your <em>primary calendar</em> (to sync CRM tasks as Calendar events) and read-only access to your <em>Gmail metadata and message bodies</em> (to display recent email threads with each contact inside the CRM).</li>
+  </ul>
+
+  <h2>3. How we use this data</h2>
+  <ul>
+    <li>Client data is used solely to operate the brokerage — quoting plans, scheduling follow-ups, tracking renewals, and communicating with the client.</li>
+    <li>Google Calendar data is used to create, update, and remove events that mirror tasks scheduled in the CRM.</li>
+    <li>Gmail data is used only to display threads inline with the corresponding CRM contact. Email contents are not stored on our servers; they are fetched on-demand from your Gmail account each time the CRM is opened.</li>
+  </ul>
+
+  <h2>4. How data is stored</h2>
+  <p>Client records are stored in a private Supabase Postgres database with row-level security enabled. Only the authenticated brokerage account can read or modify the records. Uploaded documents are stored in a private Supabase Storage bucket scoped to the same account. Data is encrypted in transit (HTTPS / TLS) and at rest (Supabase / GCP managed storage).</p>
+
+  <h2>5. Sharing</h2>
+  <p>Client data is never sold, traded, rented, or shared with third parties for marketing purposes. Data is only disclosed to:</p>
+  <ul>
+    <li>Health insurance carriers and the federal Marketplace, when submitting an enrollment on behalf of a client (with the client&rsquo;s explicit authorization).</li>
+    <li>Government agencies, when required by law (e.g., HIPAA-related subpoenas).</li>
+  </ul>
+
+  <h2>6. Google API services — limited use</h2>
+  <p>The Service&rsquo;s use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements. Specifically, Google account data:</p>
+  <ul>
+    <li>Is used only to provide user-facing features within the Service (calendar sync and email-thread display).</li>
+    <li>Is not used for advertising or transferred to third parties.</li>
+    <li>Is not used for AI/ML training.</li>
+    <li>Is not read by any human other than the account holder, except as required for security investigations or legal compliance.</li>
+  </ul>
+
+  <h2>7. Revoking access</h2>
+  <p>You can disconnect Google at any time by visiting <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">https://myaccount.google.com/permissions</a> and removing &ldquo;GripLeads CRM&rdquo;. You can also clear stored CRM data by signing out of the Service.</p>
+
+  <h2>8. Retention</h2>
+  <p>CRM client records are retained for as long as the brokerage relationship is active and for a reasonable period thereafter for compliance with insurance recordkeeping requirements (typically 7 years). Google access tokens are stored only for the duration of an active session; they are not persisted to disk.</p>
+
+  <h2>9. Children</h2>
+  <p>The Service is not directed to children under 13 and does not knowingly collect their personal information except as listed dependents on a parent&rsquo;s health insurance application.</p>
+
+  <h2>10. Changes</h2>
+  <p>If this policy is updated, the &ldquo;Last updated&rdquo; date at the top of the page will change.</p>
+
+  <div class="contact">
+    <strong>Contact</strong><br>
+    Emanuel Greco — Licensed Health Insurance Broker<br>
+    Email: <a href="mailto:coveredbygreco@gmail.com">coveredbygreco@gmail.com</a><br>
+    Phone: <a href="tel:8132032245">(813) 203-2245</a>
+  </div>
+</body>
+</html>
