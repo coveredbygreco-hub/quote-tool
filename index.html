@@ -10268,12 +10268,15 @@ function renderCRMYTDSales() {
   const yEnd   = new Date(year, 11, 31);
   const h1End  = new Date(year, 6, 0); // June 30
 
+  // Year filter: ONLY effective_date counts. Don't fall back to created_at —
+  // that was bucketing 2025 policies (uploaded today) into 2026 because their
+  // Supabase row was created in 2026.
   const inYear = p => {
-    const d = parseLocalDate(p.effective_date || p.created_at);
+    const d = parseLocalDate(p.effective_date);
     return d && d >= yStart && d <= yEnd;
   };
   const inH1 = p => {
-    const d = parseLocalDate(p.effective_date || p.created_at);
+    const d = parseLocalDate(p.effective_date);
     return d && d >= yStart && d <= h1End;
   };
 
@@ -10820,8 +10823,10 @@ function computeAutoTakenRates() {
   const _yr = (typeof getCRMYear === 'function') ? getCRMYear() : today.getFullYear();
   const yStart = new Date(_yr, 0, 1);
   const yEnd   = new Date(_yr, 11, 31);
+  // Same year-filter fix as YTD Sales — only effective_date counts.
+  // Submitted-but-not-issued policies need their submit_date if no effective_date.
   const inWindow = (p) => {
-    const d = parseLocalDate(p.effective_date || p.submit_date || p.created_at);
+    const d = parseLocalDate(p.effective_date || p.submit_date);
     if (!d) return false;
     return d >= yStart && d <= yEnd;
   };
