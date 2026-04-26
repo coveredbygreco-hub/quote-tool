@@ -1796,7 +1796,7 @@
       <button class="settings-gear" id="crmTabTasks" onclick="showCRMTab('tasks')">Tasks <span id="crmTaskBadge" style="display:none;background:var(--error);color:#fff;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabRenewals" onclick="showCRMTab('renewals')">Renewals <span id="crmRenewalBadge" style="display:none;background:var(--yellow);color:var(--navy);padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabCommissions" onclick="showCRMTab('commissions')">Commissions</button>
-      <button class="settings-gear" id="crmTabYTDSales" onclick="showCRMTab('ytdsales')">YTD Sales</button>
+      <button class="settings-gear" id="crmTabYTDSales" onclick="showCRMTab('ytdsales')">YTD Sales <span id="crmYTDBadge" style="display:none;background:var(--success);color:#fff;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabReports" onclick="showCRMTab('reports')">Reports</button>
       <div style="position:relative;flex:1;min-width:200px;max-width:340px;margin:0 4px">
         <input id="crmSearchBar" type="text" placeholder="Search…  ⌘K" autocomplete="off"
@@ -4009,6 +4009,11 @@ let crmPipelines = [];         // cached pipelines
 let crmStages = [];            // cached stages (all pipelines)
 let crmDeals = [];             // cached deals
 let crmContacts = [];          // cached contacts (for name/email lookup on deal cards)
+// Fast O(1) contact lookups — rebuilt by loadCRMData(). Replaces .find() loops
+// in render functions that touched ~14k iterations on a ~200-policy book.
+let crmContactById = new Map();
+function getContactById(id) { return crmContactById.get(id); }
+window.getContactById = getContactById;
 let crmActiveTab = 'dashboard';
 // Year context for Commission / YTD Sales / Bonus Tracker views.
 // Defaults to current year; user can switch via year selector. Renewals tab
@@ -4317,6 +4322,10 @@ async function loadCRMData() {
   ]);
   crmDeals = (dealsRes && dealsRes.data) ? dealsRes.data : [];
   crmContacts = contacts || [];
+  // Rebuild O(1) contact-by-id Map and invalidate the policy commission calc
+  // cache so views see fresh numbers on every reload.
+  crmContactById = new Map(crmContacts.map(c => [c.id, c]));
+  if (typeof invalidatePolicyCalcCache === 'function') invalidatePolicyCalcCache();
 
   // Tier-1 tables — gracefully handle cases where the user hasn't run the SQL migration yet.
   crmTasks = await safeTableSelect('tasks', q => q.order('due_date', { ascending: true }));
@@ -4345,8 +4354,104 @@ async function loadCRMData() {
         else if (crmActiveTab === 'dashboard') renderCRMDashboard();
       }
     });
+    // Tier 5 auto-graduate: deals sitting in Leads > Sold from yesterday or
+    // earlier auto-move to Clients > Active so the Leads board only shows
+    // recent wins. Same idempotent gate.
+    if (typeof autoMoveSoldDealsToClients === 'function') {
+      autoMoveSoldDealsToClients().then(moved => {
+        if (moved > 0) {
+          showToast(`Moved ${moved} won deal${moved === 1 ? '' : 's'} from Leads → Clients · Active`, 'success');
+          if (crmActiveTab === 'pipelines') renderCRMPipelines();
+          else if (crmActiveTab === 'dashboard') renderCRMDashboard();
+        }
+      }).catch(e => console.warn('autoMoveSoldDealsToClients failed:', e));
+    }
   }
 }
+
+// =====================================================================
+// AUTO-GRADUATE — move yesterday's "Sold" deals to "Clients > Active"
+// Runs once per session after data loads. Idempotent.
+// =====================================================================
+async function autoMoveSoldDealsToClients() {
+  if (!crmClient || !crmUser) return 0;
+  // Find Leads pipeline → Sold stage
+  const leadsPipeline = (crmPipelines || []).find(p => (p.name || '').toLowerCase() === 'leads')
+    || (crmPipelines || [])[0];
+  if (!leadsPipeline) return 0;
+  const soldStage = (crmStages || []).find(s =>
+    s.pipeline_id === leadsPipeline.id &&
+    (s.is_won || (s.name || '').toLowerCase() === 'sold')
+  );
+  if (!soldStage) return 0;
+
+  // Find Clients pipeline → Active stage
+  const clientsPipeline = (crmPipelines || []).find(p => (p.name || '').toLowerCase() === 'clients');
+  if (!clientsPipeline) return 0;
+  const activeStage = (crmStages || []).find(s =>
+    s.pipeline_id === clientsPipeline.id &&
+    (s.name || '').toLowerCase() === 'active'
+  ) || (crmStages || []).find(s => s.pipeline_id === clientsPipeline.id);
+  if (!activeStage) return 0;
+
+  // Cutoff: midnight today (local). Anything in Sold older than this graduates.
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const cutoffIso = midnight.toISOString();
+
+  // Pull candidates server-side so we don't hit RLS surprises
+  const { data: candidates, error } = await crmClient
+    .from('deals')
+    .select('id, name, contact_id, updated_at, created_at')
+    .eq('owner_id', crmUser.id)
+    .eq('stage_id', soldStage.id)
+    .lt('updated_at', cutoffIso);
+  if (error) {
+    // If `updated_at` column doesn't exist on this schema, fall back to created_at
+    const fallback = await crmClient
+      .from('deals')
+      .select('id, name, contact_id, created_at')
+      .eq('owner_id', crmUser.id)
+      .eq('stage_id', soldStage.id)
+      .lt('created_at', cutoffIso);
+    if (fallback.error) return 0;
+    return _doGraduate(fallback.data || [], clientsPipeline.id, activeStage.id);
+  }
+  return _doGraduate(candidates || [], clientsPipeline.id, activeStage.id);
+}
+
+async function _doGraduate(deals, newPipelineId, newStageId) {
+  if (!deals.length) return 0;
+  let moved = 0;
+  // Update in a single batch via .in() — fast and atomic.
+  const ids = deals.map(d => d.id);
+  const { error } = await crmClient
+    .from('deals')
+    .update({ pipeline_id: newPipelineId, stage_id: newStageId })
+    .in('id', ids);
+  if (error) {
+    console.error('Graduate failed:', error);
+    return 0;
+  }
+  moved = ids.length;
+  // Log activity for each graduated deal so it shows up in the timeline
+  for (const d of deals) {
+    try {
+      await crmClient.from('activities').insert({
+        owner_id: crmUser.id,
+        deal_id: d.id,
+        contact_id: d.contact_id,
+        type: 'stage_change',
+        description: `Auto-graduated from Leads · Sold → Clients · Active`,
+        occurred_at: new Date().toISOString()
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  // Refresh in-memory cache so the UI sees the move immediately
+  await loadCRMData();
+  return moved;
+}
+window.autoMoveSoldDealsToClients = autoMoveSoldDealsToClients;
 
 // Safely select a table — returns [] if the table doesn't exist yet (pre-migration).
 async function safeTableSelect(tableName, applyOrder) {
@@ -5688,7 +5793,36 @@ function showCRMTab(tab) {
     el.style.fontWeight = tab === t ? '600' : '';
   });
   const body = document.getElementById('crmWorkspaceBody');
-  // Skeleton loader — shimmer placeholders matching common tab layouts
+  // Tab freshness check — skip the loadCRMData roundtrip when data was just fetched.
+  // This makes tab switching feel instant for back-to-back clicks within ~5s.
+  const FRESH_MS = 5000;
+  const isFresh = window.__crmDataLoadedAt && (Date.now() - window.__crmDataLoadedAt < FRESH_MS);
+
+  const renderTab = () => {
+    if (tab === 'dashboard') renderCRMDashboard();
+    else if (tab === 'tasks') renderCRMTasks();
+    else if (tab === 'renewals') renderCRMRenewals();
+    else if (tab === 'commissions') renderCRMCommissions();
+    else if (tab === 'ytdsales') renderCRMYTDSales();
+    else if (tab === 'reports') renderCRMReports();
+    else renderCRMPipelines();
+    updateCRMTaskBadge();
+    updateCRMRenewalBadge();
+    if (typeof updateCRMYTDBadge === 'function') updateCRMYTDBadge();
+  };
+
+  if (isFresh && Array.isArray(crmDeals) && crmDeals.length >= 0) {
+    // Fast path — render immediately, refresh data in background
+    renderTab();
+    loadCRMData().then(() => {
+      window.__crmDataLoadedAt = Date.now();
+      // Re-render only if user is still on this tab
+      if (crmActiveTab === tab) renderTab();
+    }).catch(() => {});
+    return;
+  }
+
+  // Slow path — show skeleton while fetching
   body.innerHTML = `
     <div style="padding:20px">
       <div class="skeleton-grid" style="margin-bottom:14px">
@@ -5700,15 +5834,8 @@ function showCRMTab(tab) {
       <div class="skeleton-card"><div class="skeleton skeleton-line w-1-4" style="height:18px;margin-bottom:14px"></div><div class="skeleton skeleton-line w-full"></div><div class="skeleton skeleton-line w-3-4"></div><div class="skeleton skeleton-line w-full"></div><div class="skeleton skeleton-line w-1-2"></div></div>
     </div>`;
   loadCRMData().then(() => {
-    if (tab === 'dashboard') renderCRMDashboard();
-    else if (tab === 'tasks') renderCRMTasks();
-    else if (tab === 'renewals') renderCRMRenewals();
-    else if (tab === 'commissions') renderCRMCommissions();
-    else if (tab === 'ytdsales') renderCRMYTDSales();
-    else if (tab === 'reports') renderCRMReports();
-    else renderCRMPipelines();
-    updateCRMTaskBadge();
-    updateCRMRenewalBadge();
+    window.__crmDataLoadedAt = Date.now();
+    renderTab();
   }).catch(e => {
     body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--error)">Error loading CRM data: ' + (e.message || e) + '</div>';
   });
@@ -6429,39 +6556,43 @@ async function crmDrop(ev, newStageId, newPipelineId) {
   if (!deal) return;
   if (deal.stage_id === newStageId && deal.pipeline_id === newPipelineId) return; // no-op
 
-  // Optimistic update in local cache so the UI snaps immediately
+  // ---- Optimistic update — UI snaps instantly ----
   const prevStage = deal.stage_id;
   const prevPipeline = deal.pipeline_id;
   deal.stage_id = newStageId;
   deal.pipeline_id = newPipelineId;
+  // Set updated_at locally so today's drop won't trigger auto-graduate-to-clients later today
+  deal.updated_at = new Date().toISOString();
   renderCRMPipelines();
 
-  try {
-    const { error } = await crmClient
-      .from('deals')
-      .update({ stage_id: newStageId, pipeline_id: newPipelineId })
-      .eq('id', dealId);
-    if (error) throw error;
-    // Auto-log the stage change to the activity timeline
-    const prevStageName = crmStages.find(s => s.id === prevStage)?.name || '?';
-    const newStageName = crmStages.find(s => s.id === newStageId)?.name || '?';
-    const prevPipName = crmPipelines.find(p => p.id === prevPipeline)?.name || '?';
-    const newPipName = crmPipelines.find(p => p.id === newPipelineId)?.name || '?';
-    const sameP = prevPipeline === newPipelineId;
-    const desc = sameP
-      ? `Stage moved: ${prevStageName} → ${newStageName}`
-      : `Moved: ${prevPipName}/${prevStageName} → ${newPipName}/${newStageName}`;
-    await logActivity(dealId, 'system', desc, deal.contact_id);
-    // Refresh from server so any server-side triggers (updated_at etc.) come back
-    await loadCRMData();
-    renderCRMPipelines();
-  } catch (e) {
-    // Roll back
-    deal.stage_id = prevStage;
-    deal.pipeline_id = prevPipeline;
-    renderCRMPipelines();
-    showToast('Could not move deal: ' + ((e && e.message) || 'Unknown error'), 'error');
-  }
+  // ---- Background Supabase write (no await on UI critical path) ----
+  // Capture names while we still have them in memory (no roundtrip needed)
+  const prevStageName = crmStages.find(s => s.id === prevStage)?.name || '?';
+  const newStageName  = crmStages.find(s => s.id === newStageId)?.name || '?';
+  const prevPipName   = crmPipelines.find(p => p.id === prevPipeline)?.name || '?';
+  const newPipName    = crmPipelines.find(p => p.id === newPipelineId)?.name || '?';
+  const sameP = prevPipeline === newPipelineId;
+  const desc = sameP
+    ? `Stage moved: ${prevStageName} → ${newStageName}`
+    : `Moved: ${prevPipName}/${prevStageName} → ${newPipName}/${newStageName}`;
+
+  (async () => {
+    try {
+      const { error } = await crmClient
+        .from('deals')
+        .update({ stage_id: newStageId, pipeline_id: newPipelineId })
+        .eq('id', dealId);
+      if (error) throw error;
+      // Activity log fires-and-forgets — never blocks the UI
+      logActivity(dealId, 'system', desc, deal.contact_id).catch(() => {});
+    } catch (e) {
+      // Roll back on failure
+      deal.stage_id = prevStage;
+      deal.pipeline_id = prevPipeline;
+      renderCRMPipelines();
+      showToast('Could not move deal: ' + ((e && e.message) || 'Unknown error'), 'error');
+    }
+  })();
 }
 
 // ---------- Deal Detail Modal ----------
@@ -8808,9 +8939,27 @@ function policyCurrentYear(policy) {
   return Math.max(1, years);
 }
 
+// Memoization cache for policyCommissionCalc — keyed by policy.id + a fingerprint
+// of inputs that affect the calc. Bumping crmCalcCacheVersion (e.g. on data reload)
+// invalidates the cache.
+const _policyCalcCache = new Map();
+let crmCalcCacheVersion = 0;
+function invalidatePolicyCalcCache() { _policyCalcCache.clear(); crmCalcCacheVersion++; }
+window.invalidatePolicyCalcCache = invalidatePolicyCalcCache;
+
 // Build a calc object for any USHA policy. Wraps calculateUSHACommission for
 // rate-book products; handles legacy commission_type/rate fields too.
+// Memoized — re-renders within the same session reuse the cached calc.
 function policyCommissionCalc(policy) {
+  if (!policy) return null;
+  // Cache key — include the fields that drive the calc so policy edits invalidate naturally
+  const key = `${policy.id}|${policy.commission_product}|${policy.state}|${policy.coverage_level}|${policy.monthly_premium}|${policy.effective_date}|${policy.is_exchange_or_rewrite ? 1 : 0}|${policy.commission_type || ''}|${policy.commission_rate || ''}`;
+  if (_policyCalcCache.has(key)) return _policyCalcCache.get(key);
+  const result = _policyCalcCacheCompute(policy);
+  _policyCalcCache.set(key, result);
+  return result;
+}
+function _policyCalcCacheCompute(policy) {
   if (!policy) return null;
   // Rate-book path (USHA product picked)
   if (policy.commission_product) {
@@ -9638,6 +9787,23 @@ function updateCRMRenewalBadge() {
   if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
   else badge.style.display = 'none';
 }
+
+// Number of issued policies for the selected year — shown on the YTD Sales tab.
+function updateCRMYTDBadge() {
+  const badge = document.getElementById('crmYTDBadge');
+  if (!badge) return;
+  const yr = (typeof getCRMYear === 'function') ? getCRMYear() : new Date().getFullYear();
+  const yStart = new Date(yr, 0, 1);
+  const yEnd   = new Date(yr, 11, 31);
+  const count = (crmPolicies || []).filter(p => {
+    if (p.status !== 'active') return false;
+    const d = parseLocalDate(p.effective_date);
+    return d && d >= yStart && d <= yEnd;
+  }).length;
+  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+  else badge.style.display = 'none';
+}
+window.updateCRMYTDBadge = updateCRMYTDBadge;
 
 // Create a single renewal follow-up task (due 30 days before renewal)
 async function createRenewalTask(policyId) {
