@@ -9,6 +9,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Google Identity Services — used by the CRM's Google Calendar sync (Tier 2). -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- pdf.js — used to parse uploaded USHA Weekly Advance Statement PDFs in-browser. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (window['pdfjsLib']) { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }</script>
+<!-- SheetJS — used to parse uploaded USHA Sales Export xlsx files in-browser. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -1639,6 +1644,17 @@
         </div>
       </div>
 
+      <!-- Sign out -->
+      <div style="padding:12px 14px;border:1px solid rgba(239,68,68,0.25);border-radius:10px;margin-bottom:12px;background:rgba(239,68,68,0.04)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">Sign out</div>
+            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">End your CRM session. You'll need to sign back in to access your data.</div>
+          </div>
+          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(crmSignOut, 50)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0;color:var(--error);border-color:rgba(239,68,68,0.3)">Sign out</button>
+        </div>
+      </div>
+
       <!-- Quick reference -->
       <div class="modal-note" style="margin-top:8px;font-size:11.5px;line-height:1.5">
         <div style="margin-bottom:6px"><strong>Tip:</strong> If "Connect Google" returns an error mentioning <code>file://</code>, you opened the HTML locally instead of via the live URL. Always test on <code>coveredbygreco-hub.github.io/quote-tool/</code>.</div>
@@ -1663,10 +1679,11 @@
     </div>
     <div class="saved-leads-head-row" style="flex-wrap:wrap;gap:8px">
       <button class="settings-gear" id="crmTabDashboard" onclick="showCRMTab('dashboard')" style="background:var(--yellow);color:var(--navy);font-weight:600">Dashboard</button>
-      <button class="settings-gear" id="crmTabPipelines" onclick="showCRMTab('pipelines')">Pipelines</button>
+      <button class="settings-gear" id="crmTabPipelines" onclick="showCRMTab('pipelines')">Tracker</button>
       <button class="settings-gear" id="crmTabTasks" onclick="showCRMTab('tasks')">Tasks <span id="crmTaskBadge" style="display:none;background:var(--error);color:#fff;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabRenewals" onclick="showCRMTab('renewals')">Renewals <span id="crmRenewalBadge" style="display:none;background:var(--yellow);color:var(--navy);padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabCommissions" onclick="showCRMTab('commissions')">Commissions</button>
+      <button class="settings-gear" id="crmTabYTDSales" onclick="showCRMTab('ytdsales')">YTD Sales</button>
       <button class="settings-gear" id="crmTabReports" onclick="showCRMTab('reports')">Reports</button>
       <div style="position:relative;flex:1;min-width:200px;max-width:340px;margin:0 4px">
         <input id="crmSearchBar" type="text" placeholder="Search name, email, phone, city, notes…" autocomplete="off"
@@ -1685,7 +1702,6 @@
         </svg>
         Settings
       </button>
-      <button class="settings-gear" onclick="crmSignOut()">Sign out</button>
     </div>
     <div class="modal-body" id="crmWorkspaceBody" style="min-height:420px">
       <div style="padding:40px;text-align:center;color:var(--muted)">Loading…</div>
@@ -1775,7 +1791,14 @@
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600" id="pol_products_header">Products in this sale</div>
-          <div id="pol_products_help" style="font-size:11px;color:var(--muted)">Stack multiple products if you sold a bundle.</div>
+          <div id="pol_products_help" style="font-size:11px;color:var(--muted)">Pick a Sale Template to pre-load, or stack manually.</div>
+        </div>
+        <!-- Sale Template picker (Tier 5 Phase 2) — hidden in edit mode, populated by JS -->
+        <div id="pol_template_wrap" style="margin-bottom:10px">
+          <label class="label" style="font-size:11px">⚡ Sale Template (replaces all rows)</label>
+          <select class="input" id="pol_template_picker" onchange="applyPolicyTemplate(this.value); this.value='';">
+            <option value="">— Pick a preset bundle —</option>
+          </select>
         </div>
         <div id="pol_products_container"></div>
         <button class="btn-ghost" id="pol_add_product_btn" style="padding:7px 12px;font-size:12px;width:auto;margin-top:6px;margin-bottom:0" onclick="addPolicyProductRow()">+ Add another product</button>
@@ -3873,6 +3896,16 @@ let crmStages = [];            // cached stages (all pipelines)
 let crmDeals = [];             // cached deals
 let crmContacts = [];          // cached contacts (for name/email lookup on deal cards)
 let crmActiveTab = 'dashboard';
+// Year context for Commission / YTD Sales / Bonus Tracker views.
+// Defaults to current year; user can switch via year selector. Renewals tab
+// uses live date logic and ignores this — it always reflects today.
+let crmSelectedYear = new Date().getFullYear();
+function getCRMYear() { return crmSelectedYear; }
+function setCRMYear(y) {
+  crmSelectedYear = parseInt(y) || new Date().getFullYear();
+  if (crmActiveTab === 'commissions') renderCRMCommissions();
+  else if (crmActiveTab === 'ytdsales') renderCRMYTDSales();
+}
 
 function loadCRMSettings() {
   try {
@@ -4175,6 +4208,9 @@ async function loadCRMData() {
   crmTasks = await safeTableSelect('tasks', q => q.order('due_date', { ascending: true }));
   crmActivities = await safeTableSelect('activities', q => q.order('occurred_at', { ascending: false }));
   crmPolicies = await safeTableSelect('policies', q => q.order('effective_date', { ascending: false }));
+  // Paychecks (Tier 5) — used by Commission tab + YTD Sales tab actuals.
+  // Safe if the table doesn't exist yet (no-op until migration runs).
+  if (typeof loadCRMPaychecks === 'function') { try { await loadCRMPaychecks(); } catch (e) {} }
 
   // Tier 3 auto-task scan — idempotent, runs once per session after first
   // successful data load. Creates renewal / birthday / anniversary tasks on
@@ -5395,6 +5431,95 @@ function renderActivitiesForDeal(deal) {
     </div>`;
 }
 
+// Small commission rollup card for a single deal — shows what THIS deal pays out.
+// Filters policies by deal.contact_id (we link policies to contacts, not deals).
+function renderDealCommissionSummary(deal) {
+  if (!deal || !deal.contact_id) {
+    return '<div style="font-size:12px;color:var(--muted);padding:4px 0">Save the contact first to track commission.</div>';
+  }
+  const policies = (crmPolicies || []).filter(p =>
+    p.contact_id === deal.contact_id && (!p.status || p.status === 'active' || p.status === 'pending')
+  );
+  if (!policies.length) {
+    return '<div style="font-size:12px;color:var(--muted);padding:4px 0">No policies on this deal yet — add one in the Policies section above.</div>';
+  }
+  const tracked = policies.filter(p => policyCommissionCalc(p));
+  if (!tracked.length) {
+    return `<div style="font-size:12px;color:var(--muted);padding:4px 0">${policies.length} polic${policies.length===1?'y':'ies'} on this deal, but none have a USHA Product or manual commission set yet. Open a policy and pick a product to see commission.</div>`;
+  }
+  const r = rollupCommissionForPolicies(tracked);
+  const fmt  = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const fmt2 = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // Categorize for tag display
+  const cats = new Set();
+  for (const p of tracked) {
+    const c = ushaCategoryForPolicy(p);
+    if (c) cats.add(c);
+  }
+  const catLabels = {
+    underwritten: { label: 'UW Health', color: 'var(--yellow)', bg: 'rgba(253,199,47,0.12)' },
+    sgi:          { label: 'SGI',       color: 'var(--success)', bg: 'rgba(74,222,128,0.12)' },
+    supplemental: { label: 'Supp',      color: 'var(--white)',   bg: 'rgba(255,255,255,0.06)' },
+    asc:          { label: 'ASC',       color: 'var(--yellow)',  bg: 'rgba(253,199,47,0.12)' }
+  };
+  const tags = [...cats].map(c => {
+    const m = catLabels[c]; if (!m) return '';
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:${m.color};background:${m.bg};margin-right:4px">${m.label}</span>`;
+  }).join('');
+
+  // Per-policy mini list inside the card
+  const rows = tracked.map(p => {
+    const calc = policyCommissionCalc(p);
+    const cy = policyCurrentYear(p);
+    const curr = (calc.breakdown && calc.breakdown[cy - 1]) || {};
+    const productLabel = calc.productName || (p.carrier + (p.plan_name ? ' · ' + p.plan_name : ''));
+    const yearBadge = cy > 1 ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">Y${cy}</span>` : '';
+    return `
+      <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer" onclick="openPolicyModal('${p.contact_id}','${p.id}')">
+        <div style="color:var(--white);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(productLabel)}${yearBadge}</div>
+        <div style="text-align:right;color:var(--muted)">${p.monthly_premium != null ? fmt(Number(p.monthly_premium)) : '—'}<div style="font-size:9px;color:var(--muted)">premium</div></div>
+        <div style="text-align:right;color:var(--yellow);font-weight:600">${fmt2(curr.monthly || 0)}<div style="font-size:9px;color:var(--muted);font-weight:400">/mo</div></div>
+        <div style="text-align:right;color:var(--success)">${fmt(calc.lifetimeTotal || 0)}<div style="font-size:9px;color:var(--muted)">10-yr</div></div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div style="border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.02);padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;color:var(--white);font-weight:600">This deal pays out:</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:2px">${tags || ''}${r.count} polic${r.count===1?'y':'ies'} tracked${tracked.length < policies.length ? ` (${policies.length - tracked.length} untracked)` : ''}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:6px">
+          <div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Now/mo</div>
+          <div style="font-size:18px;color:var(--yellow);font-weight:600;font-family:'Playfair Display',serif">${fmt2(r.currentMonthly)}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:6px">
+          <div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Annual</div>
+          <div style="font-size:18px;color:var(--white);font-weight:600;font-family:'Playfair Display',serif">${fmt(r.currentMonthly * 12)}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:6px">
+          <div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">YTD est.</div>
+          <div style="font-size:18px;color:var(--success);font-weight:600;font-family:'Playfair Display',serif">${fmt(r.ytdEarned)}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:6px">
+          <div style="font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">10-yr lifetime</div>
+          <div style="font-size:18px;color:var(--success);font-weight:600;font-family:'Playfair Display',serif">${fmt(r.lifetime10y)}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px;padding:4px 10px;font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--border)">
+        <div>Product</div>
+        <div style="text-align:right">Premium</div>
+        <div style="text-align:right">Now/mo</div>
+        <div style="text-align:right">10-yr</div>
+      </div>
+      ${rows}
+    </div>`;
+}
+
 function renderPoliciesForContact(contactId) {
   if (!contactId) {
     return '<div style="font-size:12px;color:var(--muted);padding:4px 0">Save the contact first to add policies.</div>';
@@ -5431,13 +5556,14 @@ function renderPoliciesForContact(contactId) {
 
 function showCRMTab(tab) {
   crmActiveTab = tab;
-  const tabs = ['dashboard','pipelines','tasks','renewals','commissions','reports'];
+  const tabs = ['dashboard','pipelines','tasks','renewals','commissions','ytdsales','reports'];
   const btnIds = {
     dashboard:'crmTabDashboard',
     pipelines:'crmTabPipelines',
     tasks:'crmTabTasks',
     renewals:'crmTabRenewals',
     commissions:'crmTabCommissions',
+    ytdsales:'crmTabYTDSales',
     reports:'crmTabReports'
   };
   tabs.forEach(t => {
@@ -5454,6 +5580,7 @@ function showCRMTab(tab) {
     else if (tab === 'tasks') renderCRMTasks();
     else if (tab === 'renewals') renderCRMRenewals();
     else if (tab === 'commissions') renderCRMCommissions();
+    else if (tab === 'ytdsales') renderCRMYTDSales();
     else if (tab === 'reports') renderCRMReports();
     else renderCRMPipelines();
     updateCRMTaskBadge();
@@ -6287,6 +6414,21 @@ function openDealDetail(dealId) {
             </select>
           </div>
         </div>
+
+        <!-- Referred toggle + free text -->
+        <div style="margin-top:12px;padding:10px 12px;background:rgba(74,222,128,0.04);border:1px solid rgba(74,222,128,0.18);border-radius:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0;font-size:13px;color:var(--white);font-weight:500">
+              <input type="checkbox" id="dd_referred_toggle" ${contact.referred_by ? 'checked' : ''} onchange="document.getElementById('dd_referred_box').style.display=this.checked?'block':'none';if(this.checked)document.getElementById('dd_referred_by').focus();else document.getElementById('dd_referred_by').value='';" style="width:16px;height:16px;cursor:pointer;accent-color:var(--success)">
+              Referred?
+            </label>
+            <span style="font-size:11px;color:var(--muted)">Toggle on if this lead was referred to you</span>
+          </div>
+          <div id="dd_referred_box" style="display:${contact.referred_by ? 'block' : 'none'};margin-top:8px">
+            <label class="label" style="font-size:11px">Who referred them?</label>
+            <textarea class="input" id="dd_referred_by" rows="2" placeholder="e.g., Referred by Linda Ketcham (existing client) — coworker · Met at his daughter's wedding 4/12" style="resize:vertical;min-height:50px;font-family:inherit;line-height:1.4;padding:8px 10px;font-size:12.5px">${escapeHTML(contact.referred_by || '')}</textarea>
+          </div>
+        </div>
       `)}
       ${section('Notes', `
         <textarea class="input" id="dd_notes" rows="5" placeholder="Leave any notes for this lead — call outcomes, follow-up reminders, preferences, quoted plans, objections…" style="resize:vertical;min-height:100px;font-family:inherit;line-height:1.5;padding:10px 12px">${escapeHTML(qd.notes || '')}</textarea>
@@ -6303,6 +6445,7 @@ function openDealDetail(dealId) {
       ${section('Tasks & Follow-ups', renderTasksForDeal(deal))}
       ${section('Activity Timeline', renderActivitiesForDeal(deal))}
       ${section('Policies', renderPoliciesForContact(deal.contact_id))}
+      ${section('Commission on this deal', renderDealCommissionSummary(deal))}
       ${section('Email Threads', renderEmailThreadsForContact(contact, deal.id))}
       ${qdBits.length ? section('Quote Snapshot', `
         <div class="modal-note" style="margin-top:0">${qdBits.map(b => escapeHTML(b)).join(' &nbsp;·&nbsp; ')}</div>
@@ -6349,7 +6492,14 @@ async function saveDealFromDetail() {
       const n = Number(v);
       return isNaN(n) ? null : n;
     })(),
-    lead_source: (document.getElementById('dd_lead_source') || { value: '' }).value || null
+    lead_source: (document.getElementById('dd_lead_source') || { value: '' }).value || null,
+    referred_by: (() => {
+      const tog = document.getElementById('dd_referred_toggle');
+      const txt = document.getElementById('dd_referred_by');
+      if (!tog || !tog.checked) return null;
+      const v = (txt && txt.value || '').trim();
+      return v || null;
+    })()
   };
 
   // Pull notes, merge into quote_data so we don't blow away the quote snapshot
@@ -7160,6 +7310,10 @@ function openPolicyModal(contactId, policyId) {
   document.getElementById('pol_add_product_btn').style.display = policy ? 'none' : '';
   document.getElementById('pol_products_header').textContent = policy ? 'Product' : 'Products in this sale';
   document.getElementById('pol_products_help').style.display = policy ? 'none' : '';
+  // Sale Template picker (Tier 5 Phase 2) — only useful when adding a new bundle.
+  const tplWrap = document.getElementById('pol_template_wrap');
+  if (tplWrap) tplWrap.style.display = policy ? 'none' : '';
+  populatePolicyTemplatePicker();
   renderPolicyProductRows();
 
   // Open the commission section if the policy has manual commission set
@@ -7204,9 +7358,7 @@ function renderPolicyProductRows() {
   if (!container) return;
   const rows = window.__policyProductRows || [];
   container.innerHTML = rows.map((r, idx) => {
-    const productOpts = USHA_PRODUCTS.map(p =>
-      `<option value="${p.id}"${r.usha_product === p.id ? ' selected' : ''}>${escapeHTML(p.name)}</option>`
-    ).join('');
+    const productOpts = ushaProductDropdownOptions(r.usha_product);
     const coverageOpts = ['Single','Couple','Family'].map(c =>
       `<option value="${c}"${r.coverage_level === c ? ' selected' : ''}>${c}</option>`
     ).join('');
@@ -7472,197 +7624,368 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------- COMMISSION HELPERS ----------
-// Returns { monthly, total, description } for a policy based on its commission settings.
-// ---------- USHA COMMISSION RATE BOOK (Tier 4) ----------
+// ---------- USHA COMMISSION RATE BOOK (Tier 5 — full rebuild) ----------
 // Source: USHEALTH Advisors Exhibit I Commission Schedule, effective
-// April 24, 2026 (file in this folder: USHAdvisors Comm Schedules 4-24-2026 - WA.pdf).
-// Rates expressed as decimals (0.5700 = 57%). All renewal rates are BASE
-// (bonus renewals depend on the agent agreement and aren't auto-applied).
-// Variants apply by state — the calculator picks the right one based on
-// `policy.state`. If state is unset, the default variant is used.
+// April 24, 2026, MERGED with historical portal rates from Emanuel's
+// Earnings Detail records (Jun-2025 → Mar-2026) per USHA Commission
+// Reference v4 (USHA_Commission_Reference_v4.md in this folder).
 //
-// Non-commissionable monthly fees are subtracted from premium BEFORE the
-// rate is applied, per the schedule's footnotes. For products where the
-// fee depends on coverage level (Single / Couple / Family), `policy.coverage_level`
-// drives the right value.
+// Each product carries:
+//   • code(s) — the numeric product code shown on USHA earnings statements
+//     (38050, 10004, 3105, etc.). Used to cross-reference with portal data.
+//   • category — 'underwritten' | 'sgi' | 'supplemental' | 'asc'
+//     drives bonus tracking (VBS = UW, VIP = SGI). Auto-classified, no UI.
+//   • variants[] — state-specific rate schedules. firstYear is the rate for
+//     applications submitted ON OR AFTER 2026-04-24; historicalFirstYear
+//     (when present) is the older portal rate, applied for policies whose
+//     effective_date is BEFORE 2026-04-24.
+//   • renewalSchedule — by-year base + bonus rates (Y2-10).
+//   • nonCommFeeMonthly OR nonCommFeeByCoverage — subtracted from premium
+//     before commission rate is applied (per official schedule footnotes).
+
+const USHA_RATE_SCHEDULE_CUTOFF = '2026-04-24'; // Apps on/after this date use new rates.
 
 const USHA_PRODUCTS = [
   // ---- Single-block renewals (Y2-10 same rate) ----
   {
-    id: 'usha:medguard_ci',
-    name: 'MedGuard Critical Illness',
+    id: 'usha:medguard_ci', name: 'MedGuard Critical Illness',
+    codes: ['10004', '10009', '10008'], category: 'supplemental',
     variants: [
       { stateRule: 'default',
         firstYear: 0.7500,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0560, bonus: 0.0240 }],
-        nonCommFeeMonthly: 0
-      }
+        nonCommFeeMonthly: 0 }
     ]
   },
   {
-    id: 'usha:accident_protector',
-    name: 'Accident Protector',
+    id: 'usha:accident_protector', name: 'Accident Protector',
+    codes: ['60611', '60631', '60630'], category: 'supplemental',
     variants: [
       { stateRule: 'default',
         excludeStates: ['AL','DE','GA','IN','KS','KY','LA','MD','MO','MS','NC','NV','OH','TN','UT','WV','WY','CO','SD'],
         firstYear: 0.5700,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0490, bonus: 0.0210 }],
-        nonCommFeeByCoverage: { Single: 9.95, Couple: 12.95, Family: 16.95 }
-      },
+        nonCommFeeByCoverage: { Single: 9.95, Couple: 12.95, Family: 16.95 } },
       { stateRule: 'states',
         states: ['AL','DE','GA','IN','KS','KY','LA','MD','MO','MS','NC','NV','OH','TN','UT','WV','WY'],
         firstYear: 0.5700,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
-        nonCommFeeByCoverage: { Single: 9.95, Couple: 12.95, Family: 16.95 }
-      },
-      { stateRule: 'states',
-        states: ['CO','SD'],
+        nonCommFeeByCoverage: { Single: 9.95, Couple: 12.95, Family: 16.95 } },
+      { stateRule: 'states', states: ['CO','SD'],
         firstYear: 0.4300,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
-        // CO has its own non-commissionable fee schedule.
-        nonCommFeeByCoverage: { Single: 9.05, Couple: 11.85, Family: 16.30 }
-      }
+        nonCommFeeByCoverage: { Single: 9.05, Couple: 11.85, Family: 16.30 } }
     ]
   },
   {
-    id: 'usha:income_protector',
-    name: 'Income Protector',
+    id: 'usha:income_protector', name: 'Income Protector', codes: [], category: 'supplemental',
     variants: [
-      { stateRule: 'default',
-        excludeStates: ['CO','DE','IN','KS','OH','UT','WV'],
+      { stateRule: 'default', excludeStates: ['CO','DE','IN','KS','OH','UT','WV'],
         firstYear: 0.5700,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
-        nonCommFeeMonthly: 0
-      },
-      { stateRule: 'states',
-        states: ['CO','DE','IN','KS','OH','UT','WV'],
+        nonCommFeeMonthly: 0 },
+      { stateRule: 'states', states: ['CO','DE','IN','KS','OH','UT','WV'],
         firstYear: 0.4200,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0175, bonus: 0.0075 }],
-        nonCommFeeMonthly: 0
-      }
+        nonCommFeeMonthly: 0 }
     ]
   },
   {
-    id: 'usha:premier_vision',
-    name: 'PremierVision',
+    id: 'usha:premier_vision', name: 'PremierVision',
+    codes: ['55000'], category: 'supplemental',
     variants: [
       { stateRule: 'default',
         firstYear: 0.3800,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0140, bonus: 0.0060 }],
-        nonCommFeeMonthly: 0
-      }
+        nonCommFeeMonthly: 0 }
     ]
   },
   {
-    id: 'usha:dental',
-    name: 'Dental & SecureDental',
+    id: 'usha:dental', name: 'Dental & SecureDental',
+    codes: ['40007', '40011'], category: 'supplemental',
     variants: [
       { stateRule: 'default',
         firstYear: 0.1800,
         renewalSchedule: [{ y1: 2, y2: 10, base: 0.0070, bonus: 0.0030 }],
-        nonCommFeeMonthly: 0
-      }
+        nonCommFeeMonthly: 0 }
     ]
   },
   // ---- Two-tier renewals (Y2 separate from Y3-10) ----
   {
-    id: 'usha:health_access',
-    name: 'HealthAccess Suite of Products',
+    id: 'usha:health_access', name: 'HealthAccess Suite',
+    codes: ['38044'], category: 'sgi',  // SGI — counts toward VIP bonus
     variants: [
-      { stateRule: 'default',
-        excludeStates: ['CO','MD','SD'],
+      { stateRule: 'default', excludeStates: ['CO','MD','SD'],
         firstYear: 0.1600,
         renewalSchedule: [
           { y1: 2, y2: 2, base: 0.0245, bonus: 0.0105 },
-          { y1: 3, y2: 10, base: 0.0245, bonus: 0.0105 }
-        ],
-        nonCommFeeMonthly: 0
-      },
-      { stateRule: 'states',
-        states: ['CO','MD','SD'],
+          { y1: 3, y2: 10, base: 0.0245, bonus: 0.0105 } ],
+        nonCommFeeMonthly: 0 },
+      { stateRule: 'states', states: ['CO','MD','SD'],
         firstYear: 0.1250,
         renewalSchedule: [
           { y1: 2, y2: 2, base: 0.0245, bonus: 0.0105 },
-          { y1: 3, y2: 10, base: 0.0245, bonus: 0.0105 }
-        ],
-        nonCommFeeMonthly: 0
-      }
+          { y1: 3, y2: 10, base: 0.0245, bonus: 0.0105 } ],
+        nonCommFeeMonthly: 0 }
     ]
   },
   {
-    id: 'usha:premier_choice_saw',
-    name: 'PremierChoice — Sickness, Accident & Wellness',
+    id: 'usha:premier_choice_saw', name: 'PremierChoice — Sickness/Accident/Wellness',
+    codes: ['38030'], category: 'underwritten',  // UW — counts toward VBS bonus
     variants: [
       { stateRule: 'default',
-        firstYear: 0.2000,
+        firstYear: 0.2000,           // 4/24/2026+ rate
+        historicalFirstYear: 0.1700, // pre-4/24/2026 portal rate
         renewalSchedule: [
           { y1: 2, y2: 2, base: 0.0420, bonus: 0.0180 },
-          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 }
-        ],
-        nonCommFeeMonthly: 0
-      }
+          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 } ],
+        nonCommFeeMonthly: 0 }
     ]
   },
   {
-    id: 'usha:secure_advantage_conversion',
-    name: 'SecureAdvantage Conversion Plans',
+    id: 'usha:premier_choice_md', name: 'PremierChoice — MD',
+    codes: ['38036'], category: 'underwritten',
+    variants: [
+      { stateRule: 'default',
+        firstYear: 0.1600, historicalFirstYear: 0.1600,
+        renewalSchedule: [
+          { y1: 2, y2: 2, base: 0.0420, bonus: 0.0180 },
+          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 } ],
+        nonCommFeeMonthly: 0 }
+    ]
+  },
+  {
+    id: 'usha:secure_advantage_conversion', name: 'SecureAdvantage Conversion',
+    codes: [], category: 'underwritten',
     variants: [
       { stateRule: 'default',
         firstYear: 0.0200,
         renewalSchedule: [
           { y1: 2, y2: 2, base: 0.0140, bonus: 0.0060 },
-          { y1: 3, y2: 10, base: 0.0140, bonus: 0.0060 }
-        ],
-        // SA Conversion Sickness/Accident: $10/mo non-comm policy fee.
-        // SA Conversion Accident-only: $30/mo. We default to $10; user can
-        // override on the policy modal if it's accident-only.
-        nonCommFeeMonthly: 10.00
-      }
+          { y1: 3, y2: 10, base: 0.0140, bonus: 0.0060 } ],
+        nonCommFeeMonthly: 10.00 }
     ]
   },
   {
-    id: 'usha:secure_advantage_saw',
-    name: 'SecureAdvantage — Sickness, Accident & Wellness',
+    id: 'usha:secure_advantage_saw', name: 'SecureAdvantage — Sickness/Accident/Wellness',
+    codes: ['39000', '39016'], category: 'underwritten',
     variants: [
       { stateRule: 'default',
-        firstYear: 0.2100,
+        firstYear: 0.2100,           // 4/24/2026+ rate
+        historicalFirstYear: 0.1700, // pre-4/24/2026 portal rate
         renewalSchedule: [
           { y1: 2, y2: 2, base: 0.0280, bonus: 0.0120 },
-          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 }
-        ],
-        nonCommFeeMonthly: 10.00 // $10/mo non-commissionable policy fee
-      }
+          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 } ],
+        nonCommFeeMonthly: 10.00 }
     ]
   },
   {
-    id: 'usha:premier_advantage',
-    name: 'PremierAdvantage',
+    id: 'usha:premier_advantage', name: 'PremierAdvantage',
+    codes: ['38050'], category: 'underwritten',
     variants: [
       { stateRule: 'default',
-        firstYear: 0.2000,
+        firstYear: 0.2000,           // 4/24/2026+ rate
+        historicalFirstYear: 0.1700, // pre-4/24/2026 portal rate
         renewalSchedule: [
           { y1: 2, y2: 2, base: 0.0420, bonus: 0.0180 },
-          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 }
-        ],
-        nonCommFeeMonthly: 0
-      }
+          { y1: 3, y2: 10, base: 0.0210, bonus: 0.0090 } ],
+        nonCommFeeMonthly: 0 }
     ]
   },
   {
-    id: 'usha:life_protector_ii',
-    name: 'Life Protector II',
+    id: 'usha:life_protector_ii', name: 'Life Protector II',
+    codes: [], category: 'supplemental',
     variants: [
       { stateRule: 'default',
         firstYear: 0.7500,
         renewalSchedule: [
           { y1: 2, y2: 2, base: 0.0560, bonus: 0.0240 },
-          { y1: 3, y2: 10, base: 0.0560, bonus: 0.0240 }
-        ],
-        nonCommFeeMonthly: 2.12 // built into premium
-      }
+          { y1: 3, y2: 10, base: 0.0560, bonus: 0.0240 } ],
+        nonCommFeeMonthly: 2.12 }
     ]
   }
 ];
+
+// ---------- USHA ASC / ASSOCIATION CHANNEL (flat $/policy/month) ----------
+// These are NOT % of premium. Each is a fixed dollar amount per active
+// policy per month, paid monthly as the membership stays in force.
+// The "premium" field is the customer's monthly cost to the carrier; the
+// "flatPerPolicyMonthly" is what Emanuel earns per policy.
+//
+// Tier 3 (Emerald) and Tier 4 (Sapphire) are in the doc but Emanuel hasn't
+// personally written any — rates are estimates pending the AIBC/SCA
+// member rate sheet. Marked `unverified: true`.
+
+const USHA_ASC_PRODUCTS = [
+  { id: 'usha_asc:tier_2_ruby',           name: 'ASC Tier 2 — Ruby',
+    codes: ['3001','3101'], category: 'asc',
+    customerPremium: 23.66, flatPerPolicyMonthly: 4.25 },
+  { id: 'usha_asc:tier_3_emerald',        name: 'ASC Tier 3 — Emerald (estimated)',
+    codes: ['3002','3102'], category: 'asc', unverified: true,
+    customerPremium: 30.00, flatPerPolicyMonthly: 7.50 },
+  { id: 'usha_asc:tier_4_sapphire',       name: 'ASC Tier 4 — Sapphire (estimated)',
+    codes: ['3003','3103'], category: 'asc', unverified: true,
+    customerPremium: 37.00, flatPerPolicyMonthly: 10.50 },
+  { id: 'usha_asc:tier_5_diamond',        name: 'ASC Tier 5 — Diamond',
+    codes: ['3004','3104'], category: 'asc',
+    customerPremium: 43.50, flatPerPolicyMonthly: 13.00 },
+  { id: 'usha_asc:tier_6_exec_diamond',   name: 'ASC Tier 6 — Executive Diamond',
+    codes: ['3005','3105'], category: 'asc',
+    customerPremium: 53.34, flatPerPolicyMonthly: 18.00 },
+  { id: 'usha_asc:aibc_pro_aca',          name: 'ASC — AIBC PRO ACA',
+    codes: ['3020'], category: 'asc',
+    customerPremium: 5.74, flatPerPolicyMonthly: 0.65 },
+  { id: 'usha_asc:abcentrepreneur_2020',  name: 'ASC — ABCentrepreneur 2020',
+    codes: ['2100'], category: 'asc',
+    customerPremium: 19.85, flatPerPolicyMonthly: 3.25 },
+  { id: 'usha_asc:premier_addvantage_asc',name: 'ASC — Premier Addvantage',
+    codes: ['40009'], category: 'asc',
+    customerPremium: 37.95, flatPerPolicyMonthly: 8.70 }
+];
+
+// All USHA products combined (used by dropdowns, lookup helpers).
+function allUSHAProducts() { return [...USHA_PRODUCTS, ...USHA_ASC_PRODUCTS]; }
+
+// ---------- USHA SALE TEMPLATES (Tier 5 Phase 2) ----------
+// One-click "load this combination" presets for the Policy modal. Each
+// template stamps a list of product rows into the multi-product UI; user
+// fills in the actual premiums and saves.
+
+const USHA_SALE_TEMPLATES = [
+  {
+    id: 'family_bundle_full',
+    name: '🏠 Family Bundle (full stack)',
+    description: 'PremierAdvantage + MedGuard + Accident Protector + Vision + Dental + ASC Tier 6 Exec Diamond',
+    rows: [
+      { usha_product: 'usha:premier_advantage',      monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:medguard_ci',            monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:accident_protector',     monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:premier_vision',         monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:dental',                 monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha_asc:tier_6_exec_diamond', monthly_premium: '53.34', coverage_level: '' }
+    ]
+  },
+  {
+    id: 'couple_bundle',
+    name: '💑 Couple Bundle',
+    description: 'PremierAdvantage + MedGuard + Accident Protector + ASC Tier 5 Diamond',
+    rows: [
+      { usha_product: 'usha:premier_advantage',      monthly_premium: '', coverage_level: 'Couple' },
+      { usha_product: 'usha:medguard_ci',            monthly_premium: '', coverage_level: 'Couple' },
+      { usha_product: 'usha:accident_protector',     monthly_premium: '', coverage_level: 'Couple' },
+      { usha_product: 'usha_asc:tier_5_diamond',     monthly_premium: '43.50', coverage_level: '' }
+    ]
+  },
+  {
+    id: 'single_health',
+    name: '👤 Single Health (basic)',
+    description: 'PremierChoice + Accident Protector + MedGuard',
+    rows: [
+      { usha_product: 'usha:premier_choice_saw',     monthly_premium: '', coverage_level: 'Single' },
+      { usha_product: 'usha:accident_protector',     monthly_premium: '', coverage_level: 'Single' },
+      { usha_product: 'usha:medguard_ci',            monthly_premium: '', coverage_level: 'Single' }
+    ]
+  },
+  {
+    id: 'health_dental_vision',
+    name: '🩺 Health + Dental + Vision',
+    description: 'PremierAdvantage + Dental + PremierVision (no supplements)',
+    rows: [
+      { usha_product: 'usha:premier_advantage',      monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:dental',                 monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:premier_vision',         monthly_premium: '', coverage_level: 'Family' }
+    ]
+  },
+  {
+    id: 'sgi_healthaccess',
+    name: '✅ SGI HealthAccess Bundle',
+    description: 'HealthAccess + Accident Protector + MedGuard. Counts toward VIP bonus.',
+    rows: [
+      { usha_product: 'usha:health_access',          monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:accident_protector',     monthly_premium: '', coverage_level: 'Family' },
+      { usha_product: 'usha:medguard_ci',            monthly_premium: '', coverage_level: 'Family' }
+    ]
+  },
+  {
+    id: 'asc_only',
+    name: '🏛 Association Membership Only',
+    description: 'ASC Tier 6 Exec Diamond — used when client only enrolls in association.',
+    rows: [
+      { usha_product: 'usha_asc:tier_6_exec_diamond', monthly_premium: '53.34', coverage_level: '' }
+    ]
+  }
+];
+
+// Populate the Sale Template <select> on first policy modal open.
+function populatePolicyTemplatePicker() {
+  const sel = document.getElementById('pol_template_picker');
+  if (!sel || sel.dataset.populated === '1') return;
+  sel.dataset.populated = '1';
+  for (const t of USHA_SALE_TEMPLATES) {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name;
+    if (t.description) opt.title = t.description;
+    sel.appendChild(opt);
+  }
+}
+
+// Apply a Sale Template to the policy modal — replaces existing product rows.
+function applyPolicyTemplate(templateId) {
+  if (!templateId) return;
+  const tpl = USHA_SALE_TEMPLATES.find(t => t.id === templateId);
+  if (!tpl) return;
+  // Replace rows with the template's preset structure.
+  window.__policyProductRows = tpl.rows.map(r => ({
+    usha_product: r.usha_product,
+    plan_name: '',
+    policy_number: '',
+    monthly_premium: r.monthly_premium,
+    coverage_level: r.coverage_level
+  }));
+  renderPolicyProductRows();
+  updatePolicyCommissionPreview();
+  showToast(`Applied "${tpl.name}" — ${tpl.rows.length} product${tpl.rows.length === 1 ? '' : 's'} ready. Fill in premiums to compute.`, 'success');
+}
+
+// Build dropdown <option> + <optgroup> HTML for product selectors. Groups
+// products by category (Underwritten / SGI / Supplemental / ASC) so they're
+// visually scannable. Shows "Code — Name" when a code exists, else just name.
+function ushaProductDropdownOptions(selectedId) {
+  const groups = [
+    { label: 'Underwritten Health (UW — counts toward VBS)', cat: 'underwritten' },
+    { label: 'Simplified / Guaranteed Issue (SGI — counts toward VIP)', cat: 'sgi' },
+    { label: 'Supplemental — Dental, Vision, Critical Illness, Accident', cat: 'supplemental' },
+    { label: 'ASC / Association — Flat $/policy/month', cat: 'asc' }
+  ];
+  return groups.map(g => {
+    const prods = allUSHAProducts().filter(p => p.category === g.cat);
+    if (!prods.length) return '';
+    const opts = prods.map(p => {
+      const codeLabel = (p.codes && p.codes.length) ? `${p.codes[0]} — ` : '';
+      const sel = (p.id === selectedId) ? ' selected' : '';
+      const flag = p.unverified ? ' ⚠' : '';
+      return `<option value="${p.id}"${sel}>${escapeHTML(codeLabel + p.name + flag)}</option>`;
+    }).join('');
+    return `<optgroup label="${escapeHTML(g.label)}">${opts}</optgroup>`;
+  }).join('');
+}
+
+// Look up a product by its USHA numeric code (cross-references your
+// Earnings Detail statements). Returns the product object or null.
+function findUSHAProductByCode(code) {
+  const c = String(code || '').trim();
+  if (!c) return null;
+  return allUSHAProducts().find(p => Array.isArray(p.codes) && p.codes.includes(c)) || null;
+}
+
+// Auto-classify a stored policy as 'underwritten' / 'sgi' / 'supplemental' / 'asc'
+// based on the USHA product picked. Used for VBS / VIP bonus eligibility.
+function ushaCategoryForPolicy(policy) {
+  if (!policy || !policy.commission_product) return null;
+  const p = allUSHAProducts().find(pr => pr.id === policy.commission_product);
+  return p ? p.category : null;
+}
 
 // Pick the right variant for a product based on the policy's state.
 function pickUSHAVariant(product, state) {
@@ -7698,18 +8021,60 @@ function pickRenewalEntry(variant, policyYear) {
   return variant.renewalSchedule.find(r => policyYear >= r.y1 && policyYear <= r.y2) || null;
 }
 
+// Pick the right first-year rate based on application date. Pre-4/24/2026
+// policies pay at historical (lower) rates; on/after pay the new schedule.
+function ushaFirstYearRateForDate(variant, effectiveDateIso) {
+  // Default to the new (higher) rate if no date provided OR no historical override exists.
+  if (!variant.historicalFirstYear) return variant.firstYear;
+  if (!effectiveDateIso) return variant.firstYear;
+  const eff = String(effectiveDateIso).slice(0, 10);
+  return (eff < USHA_RATE_SCHEDULE_CUTOFF) ? variant.historicalFirstYear : variant.firstYear;
+}
+
+// Calculate ASC / Association channel commission. Flat $ per policy per
+// month, paid monthly as long as the membership stays active. Renewal years
+// pay the same as Y1 — there's no tiered drop-off like with health products.
+function calculateASCCommission({ productId, monthlyPremium }) {
+  const product = USHA_ASC_PRODUCTS.find(p => p.id === productId);
+  if (!product) return null;
+  const monthly = Number(product.flatPerPolicyMonthly) || 0;
+  // Build a 10-year breakdown so the existing UI (which expects breakdown[]) works.
+  const breakdown = [];
+  for (let y = 1; y <= 10; y++) {
+    breakdown.push({ year: y, rate: 0, monthly, annual: monthly * 12 });
+  }
+  return {
+    productId, productName: product.name,
+    type: 'asc_flat',
+    variant: null,
+    commissionablePremium: Number(monthlyPremium) || product.customerPremium || 0,
+    totalPremium: Number(monthlyPremium) || product.customerPremium || 0,
+    firstYearMonthly: monthly, firstYearAnnual: monthly * 12,
+    currentYear: 1, currentYearMonthly: monthly,
+    currentYearLabel: 'Flat $/policy/month — pays year-round',
+    lifetimeTotal: monthly * 12 * 10,
+    breakdown
+  };
+}
+
 // Calculate first-year + each renewal year's commission for a USHA policy.
 // Returns { firstYearMonthly, currentYearMonthly, currentYearLabel, lifetimeTotal, breakdown }
 // where breakdown is per-year.
 function calculateUSHACommission({ productId, state, coverageLevel, monthlyPremium, policyStartIso, isExchangeOrRewrite }) {
+  // ASC/Association products use a totally different structure (flat $ per policy).
+  if (String(productId || '').startsWith('usha_asc:')) {
+    return calculateASCCommission({ productId, monthlyPremium });
+  }
   const product = USHA_PRODUCTS.find(p => p.id === productId);
   if (!product) return null;
   const variant = pickUSHAVariant(product, state);
   if (!variant) return null;
   const commPremium = ushaCommissionableMonthly(variant, monthlyPremium, coverageLevel);
 
-  // Year 1 — first-year rate (or year-3 rate if it's an exchange/rewrite per note 10).
-  let firstYearRate = variant.firstYear;
+  // Year 1 — first-year rate honors the 4/24/2026 schedule cutoff for products
+  // whose rates increased on that date (PremierAdvantage, PremierChoice S/A/W,
+  // SecureAdvantage S/A/W). Exchanges/rewrites still pay year-3 rates per note 10.
+  let firstYearRate = ushaFirstYearRateForDate(variant, policyStartIso);
   if (isExchangeOrRewrite) {
     const y3Entry = pickRenewalEntry(variant, 3);
     if (y3Entry) firstYearRate = y3Entry.base;
@@ -8150,9 +8515,7 @@ function renderForecastRows() {
   if (!container) return;
   const rows = window.__forecastRows || [];
   container.innerHTML = rows.map((r, idx) => {
-    const productOpts = USHA_PRODUCTS.map(p =>
-      `<option value="${p.id}"${r.productId === p.id ? ' selected' : ''}>${escapeHTML(p.name)}</option>`
-    ).join('');
+    const productOpts = ushaProductDropdownOptions(r.productId);
     const coverageOpts = ['Single','Couple','Family'].map(c =>
       `<option value="${c}"${r.coverage === c ? ' selected' : ''}>${c}</option>`
     ).join('');
@@ -8302,114 +8665,652 @@ function renderUSHAForecast() {
 }
 
 // ---------- COMMISSIONS TAB ----------
+// ---------- COMMISSION ROLLUP HELPERS (Tier 5 Phase 3) ----------
+// Compute combined commission across a set of policies. Includes:
+//   • mrr — sum of monthly_premium (carrier revenue)
+//   • currentMonthly — what Emanuel earns right now per month, accounting for
+//     each policy's current year (Y1 for new, Y2-Y10 renewal rate after that)
+//   • y1Monthly — what each policy WOULD earn at Y1 rate (useful for pipeline)
+//   • ytdEarned — current-year earnings smoothed by months elapsed
+//   • lifetime10y — sum of 10-year breakdown across all policies
+//   • count — # of policies in this group
+
+function policyCurrentYear(policy) {
+  if (!policy || !policy.effective_date) return 1;
+  const start = parseLocalDate(policy.effective_date);
+  if (!start) return 1;
+  const today = new Date();
+  const years = Math.floor((today - start) / (365.25 * 24 * 60 * 60 * 1000)) + 1;
+  return Math.max(1, years);
+}
+
+// Build a calc object for any USHA policy. Wraps calculateUSHACommission for
+// rate-book products; handles legacy commission_type/rate fields too.
+function policyCommissionCalc(policy) {
+  if (!policy) return null;
+  // Rate-book path (USHA product picked)
+  if (policy.commission_product) {
+    const calc = calculateUSHACommission({
+      productId: policy.commission_product,
+      state: policy.state,
+      coverageLevel: policy.coverage_level,
+      monthlyPremium: Number(policy.monthly_premium) || 0,
+      policyStartIso: policy.effective_date,
+      isExchangeOrRewrite: !!policy.is_exchange_or_rewrite
+    });
+    return calc;
+  }
+  // Legacy manual commission path — synthesize a flat 10-year breakdown.
+  if (policy.commission_type) {
+    const est = estimateCommission(policy);
+    const monthly = est.monthly;
+    const breakdown = [];
+    for (let y = 1; y <= 10; y++) breakdown.push({ year: y, rate: 0, monthly, annual: monthly * 12 });
+    return {
+      productId: 'manual', productName: 'Custom commission',
+      type: 'manual', variant: null,
+      commissionablePremium: Number(policy.monthly_premium) || 0,
+      totalPremium: Number(policy.monthly_premium) || 0,
+      firstYearMonthly: monthly, firstYearAnnual: monthly * 12,
+      currentYear: 1, currentYearMonthly: monthly, currentYearLabel: 'Year 1',
+      lifetimeTotal: est.total || (monthly * 12 * 10),
+      breakdown
+    };
+  }
+  return null;
+}
+
+function rollupCommissionForPolicies(policies) {
+  const totals = {
+    count: 0, mrr: 0,
+    y1Monthly: 0, currentMonthly: 0,
+    ytdEarned: 0, lifetime10y: 0
+  };
+  if (!Array.isArray(policies)) return totals;
+  const today = new Date();
+  const monthsElapsedThisYear = today.getMonth() + (today.getDate() / 30);
+  for (const p of policies) {
+    const calc = policyCommissionCalc(p);
+    if (!calc) continue;
+    totals.count++;
+    totals.mrr += Number(p.monthly_premium) || 0;
+    totals.y1Monthly += calc.firstYearMonthly || 0;
+    // Pick current year's rate (accounting for time since effective_date).
+    const currentYear = policyCurrentYear(p);
+    const currentEntry = calc.breakdown && calc.breakdown[currentYear - 1];
+    const currMonthly = currentEntry ? currentEntry.monthly : (calc.currentYearMonthly || calc.firstYearMonthly || 0);
+    totals.currentMonthly += currMonthly;
+    // YTD smoothed: each policy contributes (current monthly × months elapsed this year)
+    // capped to months since effective_date (whichever is less).
+    let monthsCounted = monthsElapsedThisYear;
+    if (p.effective_date) {
+      const eff = parseLocalDate(p.effective_date);
+      if (eff && eff.getFullYear() === today.getFullYear()) {
+        const monthsSinceEff = (today - eff) / (30.44 * 24 * 60 * 60 * 1000);
+        monthsCounted = Math.min(monthsElapsedThisYear, Math.max(0, monthsSinceEff));
+      }
+    }
+    totals.ytdEarned += currMonthly * monthsCounted;
+    // 10-year lifetime
+    totals.lifetime10y += calc.lifetimeTotal || 0;
+  }
+  return totals;
+}
+
+// ---------- BONUS TRACKER ----------
+// Tracks progress against the three big USHA bonus/award programs:
+//   • VIP Production Bonus ($3M pool, SGI-driven, Jan 1 – Jun 30)
+//   • VBS Program ($9M pool, UW-driven, Jan 1 – Jun 30)
+//   • Council of Excellence Personal Production (UW + SGI Taken Rate, $1M Issued AV, full year)
+//
+// Auto-pulls Issued AV + SGI app counts from crmPolicies (status active/pending,
+// effective_date inside the program window). Taken Rates are user-entered
+// because we don't track submitted-vs-issued at the lead level — pulled from
+// agent.ushadvisors.com and stored in localStorage.
+
+const BONUS_TR_KEY = 'cbg_bonus_taken_rates_v1';
+
+function getBonusTakenRates() {
+  try {
+    const raw = localStorage.getItem(BONUS_TR_KEY);
+    if (!raw) return { uwTR: null, sgiTR: null, updatedAt: null };
+    return JSON.parse(raw) || {};
+  } catch (e) {
+    return { uwTR: null, sgiTR: null, updatedAt: null };
+  }
+}
+
+function saveBonusTakenRates(uwTR, sgiTR) {
+  const data = {
+    uwTR: uwTR == null || uwTR === '' ? null : Number(uwTR),
+    sgiTR: sgiTR == null || sgiTR === '' ? null : Number(sgiTR),
+    updatedAt: new Date().toISOString()
+  };
+  try { localStorage.setItem(BONUS_TR_KEY, JSON.stringify(data)); } catch (e) {}
+  return data;
+}
+
+function saveBonusTRFromInputs() {
+  const uw = document.getElementById('bonus_uw_tr');
+  const sgi = document.getElementById('bonus_sgi_tr');
+  if (!uw || !sgi) return;
+  saveBonusTakenRates(uw.value, sgi.value);
+  showToast('Taken Rates saved.', 'success');
+  // Re-render to update qualification states
+  renderCRMCommissions();
+}
+
+// Bucket active+pending policies by category and contest window.
+// Returns: { vipSgiCount, vbsUwAV, councilTotalAV, vipPolicies, vbsPolicies, councilPolicies }
+function computeBonusProgress() {
+  const out = {
+    vipSgiCount: 0, vbsUwAV: 0, councilTotalAV: 0,
+    vipPolicies: [], vbsPolicies: [], councilPolicies: []
+  };
+  if (!Array.isArray(crmPolicies)) return out;
+
+  // Contest windows — VIP/VBS = first half of selected calendar year.
+  // Council = full selected calendar year.
+  const today = new Date();
+  const year = (typeof getCRMYear === 'function') ? getCRMYear() : today.getFullYear();
+  const h1Start = new Date(year, 0, 1);   // Jan 1
+  const h1End   = new Date(year, 6, 0);   // Jun 30
+  const yStart  = new Date(year, 0, 1);
+  const yEnd    = new Date(year, 11, 31);
+
+  for (const p of crmPolicies) {
+    if (p.status && p.status !== 'active' && p.status !== 'pending') continue;
+    if (!p.effective_date) continue;
+    const eff = parseLocalDate(p.effective_date);
+    if (!eff) continue;
+    const cat = ushaCategoryForPolicy(p);
+    const av = (Number(p.monthly_premium) || 0) * 12;
+
+    // VIP — SGI app count, H1 window
+    if (cat === 'sgi' && eff >= h1Start && eff <= h1End) {
+      out.vipSgiCount++;
+      out.vipPolicies.push(p);
+    }
+    // VBS — UW Issued AV, H1 window
+    if (cat === 'underwritten' && eff >= h1Start && eff <= h1End) {
+      out.vbsUwAV += av;
+      out.vbsPolicies.push(p);
+    }
+    // Council — All Issued AV, full year
+    if (eff >= yStart && eff <= yEnd) {
+      out.councilTotalAV += av;
+      out.councilPolicies.push(p);
+    }
+  }
+  return out;
+}
+
+function renderBonusTracker() {
+  const p = computeBonusProgress();
+  const tr = getBonusTakenRates();
+  const fmt = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const pct = (n, target) => Math.min(100, Math.round((n / target) * 100));
+  const trUW  = tr.uwTR  != null ? Number(tr.uwTR)  : null;
+  const trSGI = tr.sgiTR != null ? Number(tr.sgiTR) : null;
+  const trUWStr  = trUW  != null ? `${trUW.toFixed(1)}%`  : '—';
+  const trSGIStr = trSGI != null ? `${trSGI.toFixed(1)}%` : '—';
+  const auto = tr.auto || {};
+  const trUpdated = (auto.uwTR != null || auto.sgiTR != null)
+    ? `Auto-calculated from policy data · UW: ${auto.uwIssued || 0}/${auto.uwSubmitted || 0} issued · SGI: ${auto.sgiIssued || 0}/${auto.sgiSubmitted || 0} issued${auto.sgiFixed ? ' (SGI Fixed TR 65%)' : ''}`
+    : (tr.updatedAt ? `Manual entry · updated ${formatDealDate(tr.updatedAt)}` : 'Not entered yet — type values from agent.ushadvisors.com or run the bulk import');
+
+  // Qualification logic
+  const vipCountTarget = 20;
+  const vipQualifiedCount = p.vipSgiCount >= vipCountTarget;
+  const vipQualifiedTR = trSGI != null && trSGI >= 65;
+  const vipQualified = vipQualifiedCount && vipQualifiedTR;
+
+  const vbsAVTarget = 300000;
+  const vbsQualifiedAV = p.vbsUwAV >= vbsAVTarget;
+  const vbsQualifiedTR = trUW != null && trUW >= 60;
+  const vbsQualified = vbsQualifiedAV && vbsQualifiedTR;
+
+  const councilAVTarget = 1000000;
+  const councilQualifiedAV = p.councilTotalAV >= councilAVTarget;
+  const councilQualifiedUWTR = trUW != null && trUW >= 60;
+  const councilQualifiedSGITR = trSGI != null && trSGI >= 65;
+  const councilQualified = councilQualifiedAV && councilQualifiedUWTR && councilQualifiedSGITR;
+
+  const statusBadge = (qualified, partial) => {
+    if (qualified) return `<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--success);background:rgba(74,222,128,0.15)">On Pace</span>`;
+    if (partial)   return `<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--yellow);background:rgba(253,199,47,0.15)">Building</span>`;
+    return `<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);background:rgba(255,255,255,0.06)">Not Qualified</span>`;
+  };
+
+  const bar = (current, target, color) => {
+    const p2 = pct(current, target);
+    return `
+      <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;margin-top:6px">
+        <div style="height:100%;width:${p2}%;background:${color};border-radius:4px;transition:width 0.3s ease"></div>
+      </div>`;
+  };
+
+  const checkRow = (passed, text) => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:${passed ? 'var(--success)' : 'var(--muted)'};margin-top:3px">
+      <span style="font-weight:700">${passed ? '✓' : '○'}</span>
+      <span>${text}</span>
+    </div>`;
+
+  return `
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <div class="card-title" style="margin-bottom:2px">Bonus Programs — 2026</div>
+          <div style="font-size:11px;color:var(--muted)">VIP & VBS contest period: Jan 1 – Jun 30 · Council: Full Year · AV = monthly premium × 12</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">YTD Taken Rates from portal:</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <label style="font-size:11px;color:var(--muted)">UW</label>
+            <input id="bonus_uw_tr" type="number" step="0.1" min="0" max="100"
+                   value="${trUW != null ? trUW : ''}"
+                   placeholder="—"
+                   style="width:60px;padding:4px 6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:4px;color:var(--white);font-size:12px">
+            <span style="font-size:11px;color:var(--muted)">%</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <label style="font-size:11px;color:var(--muted)">SGI</label>
+            <input id="bonus_sgi_tr" type="number" step="0.1" min="0" max="100"
+                   value="${trSGI != null ? trSGI : ''}"
+                   placeholder="—"
+                   style="width:60px;padding:4px 6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:4px;color:var(--white);font-size:12px">
+            <span style="font-size:11px;color:var(--muted)">%</span>
+          </div>
+          <button class="btn-ghost" style="padding:4px 10px;font-size:11px" onclick="saveBonusTRFromInputs()">Save</button>
+        </div>
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:-8px;margin-bottom:12px">${trUpdated} · Pull from agent.ushadvisors.com → Reports → Taken Rate</div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+
+        <!-- VIP -->
+        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:rgba(255,255,255,0.02)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <div style="font-size:13px;color:var(--success);font-weight:600">VIP Production Bonus</div>
+              <div style="font-size:10.5px;color:var(--muted)">$3M pool · SGI-driven · H1 2026</div>
+            </div>
+            ${statusBadge(vipQualified, p.vipSgiCount > 0 || trSGI != null)}
+          </div>
+          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--success)">${p.vipSgiCount}<span style="font-size:13px;color:var(--muted)"> / ${vipCountTarget} apps</span></div>
+          ${bar(p.vipSgiCount, vipCountTarget, 'var(--success)')}
+          ${checkRow(vipQualifiedCount, `20+ Issued SGI Base Health apps (${p.vipSgiCount}/${vipCountTarget})`)}
+          ${checkRow(vipQualifiedTR, `≥65% SGI YTD Taken Rate (${trSGIStr})`)}
+        </div>
+
+        <!-- VBS -->
+        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:rgba(255,255,255,0.02)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <div style="font-size:13px;color:var(--yellow);font-weight:600">VBS Program</div>
+              <div style="font-size:10.5px;color:var(--muted)">$9M pool · UW-driven · H1 2026</div>
+            </div>
+            ${statusBadge(vbsQualified, p.vbsUwAV > 0 || trUW != null)}
+          </div>
+          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(p.vbsUwAV)}<span style="font-size:13px;color:var(--muted)"> / ${fmt(vbsAVTarget)}</span></div>
+          ${bar(p.vbsUwAV, vbsAVTarget, 'var(--yellow)')}
+          ${checkRow(vbsQualifiedAV, `$300K Issued UW AV (${fmt(p.vbsUwAV)} of ${fmt(vbsAVTarget)})`)}
+          ${checkRow(vbsQualifiedTR, `≥60% UW YTD Taken Rate (${trUWStr})`)}
+        </div>
+
+        <!-- Council of Excellence -->
+        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:rgba(255,255,255,0.02)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <div style="font-size:13px;color:var(--white);font-weight:600">Council of Excellence</div>
+              <div style="font-size:10.5px;color:var(--muted)">Personal Production · Full year</div>
+            </div>
+            ${statusBadge(councilQualified, p.councilTotalAV > 0 || trUW != null || trSGI != null)}
+          </div>
+          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(p.councilTotalAV)}<span style="font-size:13px;color:var(--muted)"> / ${fmt(councilAVTarget)}</span></div>
+          ${bar(p.councilTotalAV, councilAVTarget, 'var(--white)')}
+          ${checkRow(councilQualifiedAV, `$1M Issued AV (${fmt(p.councilTotalAV)} of ${fmt(councilAVTarget)})`)}
+          ${checkRow(councilQualifiedUWTR, `≥60% UW Taken Rate (${trUWStr})`)}
+          ${checkRow(councilQualifiedSGITR, `≥65% SGI Taken Rate (${trSGIStr})`)}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ---------- Sortable table helper ----------
+// Keeps sort state per table (e.g. 'commission_policies', 'renewals_30').
+// Click a column header to toggle direction; first click = desc.
+const crmTableSorts = {};
+
+function setTableSort(tableKey, col) {
+  const cur = crmTableSorts[tableKey] || { col: null, dir: 'desc' };
+  if (cur.col === col) {
+    cur.dir = cur.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    cur.col = col;
+    cur.dir = 'desc';
+  }
+  crmTableSorts[tableKey] = cur;
+  // Re-render the active tab
+  if (crmActiveTab === 'commissions') renderCRMCommissions();
+  else if (crmActiveTab === 'renewals') renderCRMRenewals();
+}
+
+function sortableHeader(tableKey, col, label, align) {
+  const s = crmTableSorts[tableKey];
+  const active = s && s.col === col;
+  const arrow = active ? (s.dir === 'desc' ? ' ▼' : ' ▲') : '';
+  const color = active ? 'var(--yellow)' : 'var(--muted)';
+  return `<th style="text-align:${align||'left'};padding:8px 10px;color:${color};font-size:11px;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;user-select:none" onclick="setTableSort('${tableKey}','${col}')">${escapeHTML(label)}${arrow}</th>`;
+}
+
+function applyTableSort(rows, tableKey, accessors, defaultCol, defaultDir) {
+  const s = crmTableSorts[tableKey] || { col: defaultCol, dir: defaultDir || 'desc' };
+  const acc = accessors[s.col] || accessors[defaultCol];
+  if (!acc) return rows;
+  const dirMul = s.dir === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const va = acc(a), vb = acc(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dirMul;
+    return String(va).localeCompare(String(vb)) * dirMul;
+  });
+}
+
 function renderCRMCommissions() {
   const body = document.getElementById('crmWorkspaceBody');
-  const policiesWithCommission = crmPolicies.filter(p => p.commission_type);
+  // Active policies only — what's on the books today.
+  const active = (crmPolicies || []).filter(p => !p.status || p.status === 'active');
+  // Group by USHA category for the channel breakdown.
+  const byCategory = { underwritten: [], sgi: [], supplemental: [], asc: [], other: [] };
+  for (const p of active) {
+    const cat = ushaCategoryForPolicy(p);
+    if (cat && byCategory[cat]) byCategory[cat].push(p);
+    else byCategory.other.push(p);
+  }
+  const totals = rollupCommissionForPolicies(active);
 
-  // Totals across ACTIVE policies only
-  const activeCommission = policiesWithCommission.filter(p => p.status === 'active');
-  let mrr = 0;
-  let monthlyComm = 0;
-  let annualComm = 0;
-  let totalBook = 0;
-  activeCommission.forEach(p => {
-    const est = estimateCommission(p);
-    mrr += Number(p.monthly_premium) || 0;
-    monthlyComm += est.monthly;
-    annualComm += est.monthly * 12;
-    totalBook += est.total;
-  });
+  // Untracked = active policies with no commission_product AND no commission_type
+  const untrackedCount = active.filter(p => !p.commission_product && !p.commission_type).length;
 
-  // Count of all policies and those without commission data
-  const allActive = crmPolicies.filter(p => p.status === 'active').length;
-  const untrackedCount = allActive - activeCommission.length;
+  const fmt = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const fmt2 = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const fmt = n => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // ----- By-channel rollup (UW / SGI / Supplemental / ASC / Other) -----
+  const channelMeta = {
+    underwritten: { label: 'Underwritten Health', sub: 'Counts toward VBS bonus', color: 'var(--yellow)' },
+    sgi:          { label: 'SGI (Simplified / GI)', sub: 'Counts toward VIP bonus', color: 'var(--success)' },
+    supplemental: { label: 'Supplemental',         sub: 'Dental / Vision / CI / Accident / Income', color: 'var(--white)' },
+    asc:          { label: 'ASC / Association',    sub: 'Flat $/policy/month',     color: 'var(--yellow)' },
+    other:        { label: 'Manual / Other',        sub: 'Non-USHA or not categorized',color: 'var(--muted)' }
+  };
+  // Referrals — active policies whose contact has a referred_by value set.
+  // This counts the same policies (not exclusive of channels above) so it's a
+  // cross-cut: tells Emanuel what % of his book came from referrals.
+  const referredContactIds = new Set(
+    (crmContacts || []).filter(c => c.referred_by && c.referred_by.trim()).map(c => c.id)
+  );
+  const referralPolicies = active.filter(p => referredContactIds.has(p.contact_id));
+  const referralUniqueClients = new Set(referralPolicies.map(p => p.contact_id)).size;
 
-  // Group by carrier for breakdown
+  const channelRows = ['underwritten','sgi','supplemental','asc','other'].map(cat => {
+    const policies = byCategory[cat];
+    if (!policies.length) return '';
+    const r = rollupCommissionForPolicies(policies);
+    const m = channelMeta[cat];
+    return `
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);font-size:12.5px">
+        <div>
+          <div style="color:${m.color};font-weight:600">${m.label}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:1px">${r.count} polic${r.count === 1 ? 'y' : 'ies'} · ${m.sub}</div>
+        </div>
+        <div style="text-align:right;color:var(--white)">${fmt(r.mrr)}<div style="font-size:10px;color:var(--muted)">MRR</div></div>
+        <div style="text-align:right;color:var(--yellow);font-weight:600">${fmt2(r.currentMonthly)}<div style="font-size:10px;color:var(--muted);font-weight:400">Now/mo</div></div>
+        <div style="text-align:right;color:var(--success)">${fmt(r.ytdEarned)}<div style="font-size:10px;color:var(--muted)">YTD est.</div></div>
+        <div style="text-align:right;color:var(--success);font-weight:600">${fmt(r.lifetime10y)}<div style="font-size:10px;color:var(--muted);font-weight:400">10-yr</div></div>
+      </div>`;
+  }).join('');
+
+  // Referrals row — appended below the standard channels with a dashed top border to indicate it's a cross-cut, not an exclusive bucket
+  const referralR = rollupCommissionForPolicies(referralPolicies);
+  const referralRow = referralPolicies.length ? `
+    <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:10px 12px;border-top:1px dashed var(--border);font-size:12.5px;background:rgba(74,222,128,0.04)">
+      <div>
+        <div style="color:var(--success);font-weight:600">⭐ Referrals <span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:4px">(cross-cut)</span></div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:1px">${referralR.count} polic${referralR.count === 1 ? 'y' : 'ies'} from ${referralUniqueClients} referred client${referralUniqueClients === 1 ? '' : 's'} · also counted in channels above</div>
+      </div>
+      <div style="text-align:right;color:var(--white)">${fmt(referralR.mrr)}<div style="font-size:10px;color:var(--muted)">MRR</div></div>
+      <div style="text-align:right;color:var(--yellow);font-weight:600">${fmt2(referralR.currentMonthly)}<div style="font-size:10px;color:var(--muted);font-weight:400">Now/mo</div></div>
+      <div style="text-align:right;color:var(--success)">${fmt(referralR.ytdEarned)}<div style="font-size:10px;color:var(--muted)">YTD est.</div></div>
+      <div style="text-align:right;color:var(--success);font-weight:600">${fmt(referralR.lifetime10y)}<div style="font-size:10px;color:var(--muted);font-weight:400">10-yr</div></div>
+    </div>` : `
+    <div style="padding:10px 12px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--muted);background:rgba(255,255,255,0.02)">
+      ⭐ <strong style="color:var(--white)">Referrals:</strong> No referred-client policies yet — toggle "Referred?" on a contact in the Deal Detail to mark referral business.
+    </div>`;
+
+  // ----- By-carrier breakdown (kept from old version, simplified) -----
   const byCarrier = {};
-  activeCommission.forEach(p => {
+  for (const p of active) {
     const k = p.carrier || 'Unknown';
-    if (!byCarrier[k]) byCarrier[k] = { count: 0, mrr: 0, monthlyComm: 0 };
-    const est = estimateCommission(p);
+    if (!byCarrier[k]) byCarrier[k] = { count: 0, mrr: 0, monthly: 0 };
+    const calc = policyCommissionCalc(p);
+    const cy = policyCurrentYear(p);
+    const monthlyAtCurrent = calc && calc.breakdown && calc.breakdown[cy - 1] ? calc.breakdown[cy - 1].monthly : (calc ? calc.currentYearMonthly : 0);
     byCarrier[k].count++;
     byCarrier[k].mrr += Number(p.monthly_premium) || 0;
-    byCarrier[k].monthlyComm += est.monthly;
-  });
+    byCarrier[k].monthly += monthlyAtCurrent || 0;
+  }
   const carrierRows = Object.entries(byCarrier)
-    .sort((a, b) => b[1].monthlyComm - a[1].monthlyComm)
+    .sort((a, b) => b[1].monthly - a[1].monthly)
     .map(([carrier, d]) => `
       <tr style="border-bottom:1px solid var(--border)">
         <td style="padding:8px 10px">${escapeHTML(carrier)}</td>
         <td style="padding:8px 10px;text-align:right;color:var(--muted)">${d.count}</td>
         <td style="padding:8px 10px;text-align:right">${fmt(d.mrr)}</td>
-        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt(d.monthlyComm)}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt2(d.monthly)}</td>
       </tr>`).join('');
 
-  // Full policy list
-  const sortedPolicies = [...policiesWithCommission].sort((a, b) => {
-    const ea = estimateCommission(a).monthly;
-    const eb = estimateCommission(b).monthly;
-    return eb - ea;
-  });
+  // ----- Per-policy list (sortable) -----
+  // Build accessors keyed by column. tableKey = 'commission_policies'
+  const policyAccessors = {
+    client:   p => {
+      const c = crmContacts.find(c => c.id === p.contact_id);
+      return c ? ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || '') : '';
+    },
+    product:  p => {
+      const c = policyCommissionCalc(p);
+      return c ? (c.productName || (p.carrier + ' ' + (p.plan_name||''))) : (p.carrier + ' ' + (p.plan_name||''));
+    },
+    channel:  p => ushaCategoryForPolicy(p) || 'other',
+    premium:  p => Number(p.monthly_premium) || 0,
+    currentMonthly: p => {
+      const c = policyCommissionCalc(p); if (!c) return 0;
+      const cy = policyCurrentYear(p);
+      return (c.breakdown && c.breakdown[cy-1] && c.breakdown[cy-1].monthly) || 0;
+    },
+    annual:   p => {
+      const c = policyCommissionCalc(p); if (!c) return 0;
+      const cy = policyCurrentYear(p);
+      return ((c.breakdown && c.breakdown[cy-1] && c.breakdown[cy-1].monthly) || 0) * 12;
+    },
+    lifetime: p => {
+      const c = policyCommissionCalc(p); return c ? (c.lifetimeTotal || 0) : 0;
+    },
+    status:   p => p.status || 'active'
+  };
+  const sortedPolicies = applyTableSort(active, 'commission_policies', policyAccessors, 'currentMonthly', 'desc');
+
+  const channelLabelMap = {
+    underwritten: { label: 'UW',   color: 'var(--yellow)',  bg: 'rgba(253,199,47,0.12)' },
+    sgi:          { label: 'SGI',  color: 'var(--success)', bg: 'rgba(74,222,128,0.12)' },
+    supplemental: { label: 'Supp', color: 'var(--white)',   bg: 'rgba(255,255,255,0.06)' },
+    asc:          { label: 'ASC',  color: 'var(--yellow)',  bg: 'rgba(253,199,47,0.12)' },
+    other:        { label: '—',    color: 'var(--muted)',   bg: 'rgba(255,255,255,0.04)' }
+  };
   const policyRows = sortedPolicies.map(p => {
     const contact = crmContacts.find(c => c.id === p.contact_id);
     const name = contact ? ([contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || '—') : '—';
-    const est = estimateCommission(p);
-    const statusColor = p.status === 'active' ? 'var(--success)' : (p.status === 'pending' ? 'var(--yellow)' : 'var(--muted)');
+    const calc = policyCommissionCalc(p);
+    if (!calc) return '';
+    const cy = policyCurrentYear(p);
+    const currEntry = calc.breakdown[cy - 1] || {};
+    const productLabel = calc.productName || (p.carrier + (p.plan_name ? ' · ' + p.plan_name : ''));
+    const yearBadge = cy > 1 ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">Y${cy}</span>` : '';
+    const statusColor = p.status === 'active' || !p.status ? 'var(--success)' : (p.status === 'pending' ? 'var(--yellow)' : 'var(--muted)');
+    const ch = channelLabelMap[ushaCategoryForPolicy(p) || 'other'] || channelLabelMap.other;
+    const channelTag = `<span style="display:inline-block;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;color:${ch.color};background:${ch.bg}">${ch.label}</span>`;
     return `
       <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openPolicyModal('${p.contact_id}','${p.id}')">
         <td style="padding:8px 10px">${escapeHTML(name)}</td>
-        <td style="padding:8px 10px">${escapeHTML(p.carrier || '')} ${p.plan_name ? '<span style="color:var(--muted);font-size:11px">· ' + escapeHTML(p.plan_name) + '</span>' : ''}</td>
+        <td style="padding:8px 10px;font-size:12px">${escapeHTML(productLabel)}${yearBadge}</td>
+        <td style="padding:8px 10px">${channelTag}</td>
         <td style="padding:8px 10px;text-align:right">${p.monthly_premium != null ? fmt(Number(p.monthly_premium)) : '—'}</td>
-        <td style="padding:8px 10px;font-size:11px;color:var(--muted)">${commissionLabel(p.commission_type)}</td>
-        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt(est.monthly)}</td>
-        <td style="padding:8px 10px;text-align:right">${fmt(est.total)}</td>
-        <td style="padding:8px 10px"><span style="color:${statusColor};font-size:11px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600">${escapeHTML(p.status || '')}</span></td>
+        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt2(currEntry.monthly || 0)}</td>
+        <td style="padding:8px 10px;text-align:right">${fmt((currEntry.monthly || 0) * 12)}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--success)">${fmt(calc.lifetimeTotal || 0)}</td>
+        <td style="padding:8px 10px"><span style="color:${statusColor};font-size:11px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600">${escapeHTML(p.status || 'active')}</span></td>
       </tr>`;
-  }).join('');
+  }).filter(Boolean).join('');
+
+  // Pull actual paid figures from the embedded pay data file (USHA portal).
+  // Only show actuals for years where we have pay data (2026 only right now).
+  const _crmYr = getCRMYear();
+  const actual = (_crmYr === 2026 && typeof getActualYTD === 'function') ? getActualYTD() : null;
+
+  // Build year switcher — append to top of body
+  const yearSwitcher = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="display:flex;gap:6px;align-items:center;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:4px 6px">
+        <span style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;padding:0 6px">Year</span>
+        ${[2025, 2026].map(y => `
+          <button onclick="setCRMYear(${y})" style="padding:5px 12px;font-size:12px;border:none;border-radius:5px;cursor:pointer;background:${_crmYr === y ? 'var(--yellow)' : 'transparent'};color:${_crmYr === y ? 'var(--navy)' : 'var(--muted)'};font-weight:${_crmYr === y ? '600' : '400'}">${y}</button>
+        `).join('')}
+      </div>
+      ${_crmYr !== 2026 ? `<div style="font-size:11px;color:var(--yellow);background:rgba(253,199,47,0.06);border:1px solid rgba(253,199,47,0.2);border-radius:6px;padding:6px 12px">No pay data or sales import for ${_crmYr} yet — actuals will be empty until you upload a ${_crmYr} export.</div>` : ''}
+    </div>`;
+
+  // Show import banner if 2026 data is embedded and there are <50 active policies (proxy for "haven't imported yet")
+  const importBanner = (typeof BULK_IMPORT_2026_ROWS !== 'undefined' && BULK_IMPORT_2026_ROWS.length > 0) ? `
+    <div style="background:linear-gradient(135deg, rgba(74,222,128,0.08), rgba(253,199,47,0.06));border:1px solid rgba(74,222,128,0.25);border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:13px;color:var(--white);font-weight:600">2026 Sales Bulk Import Available</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px">${BULK_IMPORT_2026_ROWS.length} rows × 70 clients from your 2026 sales export. One-shot import: wipes 2026 policies, creates contacts &amp; Won deals, populates the tracker.</div>
+      </div>
+      <button class="btn-primary" style="width:auto;padding:9px 16px;margin-top:0;flex-shrink:0" onclick="openBulk2026ImportModal()">📥 Review &amp; Import</button>
+    </div>` : '';
 
   body.innerHTML = `
     <div style="padding:20px">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px">
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Active MRR</div>
-          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(mrr)}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Across ${activeCommission.length} active ${activeCommission.length === 1 ? 'policy' : 'policies'}</div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Monthly Commission</div>
-          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(monthlyComm)}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Recurring income estimate</div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Annualized</div>
-          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(annualComm)}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Monthly × 12</div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Book Value</div>
-          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totalBook)}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Total over policy terms</div>
-        </div>
+      ${yearSwitcher}
+      ${importBanner}
+      <!-- Top KPI row — uses ACTUAL paid figures from pay data when available -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:14px">
+        ${actual ? `
+          <div class="card" style="margin-bottom:0;border:1px solid rgba(74,222,128,0.3)">
+            <div style="font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">YTD Earned (actual)</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(actual.commissionEarnedYTD)}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">From USHA portal · ${actual.paycheckCount} paychecks · as of ${actual.asOf}</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Reserve Balance</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(actual.reserveBalance)}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Unearned advance · pays out as policies earn</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Cash Banked YTD</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(actual.cashBankedYTD)}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(actual.advancesYTD)} adv + ${fmt(actual.bonusesYTD)} bonus</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Net Chargebacks</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:${actual.netChargebacks < -1000 ? 'var(--error)' : 'var(--muted)'}">${fmt(actual.netChargebacks)}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(actual.chargebacksYTD)} CB · ${fmt(actual.reinstatementsYTD)} reinstated</div>
+          </div>
+        ` : `
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">YTD Earned (est)</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totals.ytdEarned)}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Smoothed projection — cross-check at agent.ushadvisors.com</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Currently Earning</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt2(totals.currentMonthly)}<span style="font-size:13px;color:var(--muted)">/mo</span></div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(totals.currentMonthly * 12)} annualized</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">10-Yr Lifetime Book</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totals.lifetime10y)}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">If every active policy stays in force</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Active Policies</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--white)">${totals.count}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(totals.mrr)} carrier MRR</div>
+          </div>
+        `}
       </div>
+
+      ${actual ? `
+        <!-- Secondary row: forward-looking projections from rate book + As Earned breakdown -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:14px">
+          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
+            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Currently Earning <span style="opacity:0.5">(est.)</span></div>
+            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt2(totals.currentMonthly)}<span style="font-size:11px;color:var(--muted)">/mo</span></div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(totals.currentMonthly * 12)} annualized · rate-book</div>
+          </div>
+          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
+            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">10-Yr Lifetime <span style="opacity:0.5">(est.)</span></div>
+            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totals.lifetime10y)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">If every active policy stays in force</div>
+          </div>
+          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
+            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Active Policies</div>
+            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--white)">${totals.count}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(totals.mrr)} carrier MRR</div>
+          </div>
+          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
+            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">As-Earned YTD</div>
+            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(actual.asEarnedYTD)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">Earned past advance · pays in cash</div>
+          </div>
+        </div>
+      ` : ''}
 
       ${untrackedCount > 0 ? `
         <div style="background:rgba(253,199,47,0.06);border:1px solid rgba(253,199,47,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--muted)">
-          <span style="color:var(--yellow);font-weight:600">${untrackedCount}</span> active ${untrackedCount === 1 ? 'policy has' : 'policies have'} no commission data — open ${untrackedCount === 1 ? 'it' : 'them'} and fill in the Commission section to include in these totals.
+          <span style="color:var(--yellow);font-weight:600">${untrackedCount}</span> active ${untrackedCount === 1 ? 'policy has' : 'policies have'} no commission data — open ${untrackedCount === 1 ? 'it' : 'them'} and pick a USHA Product (or fill the manual fields) to include.
+        </div>
+      ` : ''}
+
+      ${renderBonusTracker()}
+
+      ${channelRows || referralRow ? `
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title" style="margin-bottom:8px">By Channel</div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:6px 12px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid var(--border)">
+            <div>Channel</div>
+            <div style="text-align:right">MRR</div>
+            <div style="text-align:right">Now/mo</div>
+            <div style="text-align:right">YTD est.</div>
+            <div style="text-align:right">10-yr</div>
+          </div>
+          ${channelRows}
+          ${referralRow}
         </div>
       ` : ''}
 
       ${carrierRows ? `
-        <div class="card" style="margin-bottom:18px">
-          <div class="card-title" style="margin-bottom:10px">By Carrier (active only)</div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title" style="margin-bottom:8px">By Carrier (active only)</div>
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
               <tr style="border-bottom:1px solid var(--border)">
                 <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier</th>
                 <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Policies</th>
                 <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">MRR</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Monthly $</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Now/mo</th>
               </tr>
             </thead>
             <tbody>${carrierRows}</tbody>
@@ -8419,17 +9320,18 @@ function renderCRMCommissions() {
 
       ${policyRows ? `
         <div class="card">
-          <div class="card-title" style="margin-bottom:10px">All Commissioned Policies</div>
+          <div class="card-title" style="margin-bottom:10px">All Active Policies <span style="font-size:11px;color:var(--muted);font-weight:400">— click any column to sort</span></div>
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
               <tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Client</th>
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier / Plan</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Premium</th>
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Type</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Monthly</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Total</th>
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Status</th>
+                ${sortableHeader('commission_policies','client','Client','left')}
+                ${sortableHeader('commission_policies','product','Product','left')}
+                ${sortableHeader('commission_policies','channel','Channel','left')}
+                ${sortableHeader('commission_policies','premium','Premium','right')}
+                ${sortableHeader('commission_policies','currentMonthly','Now/mo','right')}
+                ${sortableHeader('commission_policies','annual','Annual','right')}
+                ${sortableHeader('commission_policies','lifetime','10-yr','right')}
+                ${sortableHeader('commission_policies','status','Status','left')}
               </tr>
             </thead>
             <tbody>${policyRows}</tbody>
@@ -8438,7 +9340,7 @@ function renderCRMCommissions() {
       ` : `
         <div style="padding:40px;text-align:center;color:var(--muted)">
           <div style="font-size:14px;color:var(--white);margin-bottom:8px">No commissions tracked yet</div>
-          <div style="font-size:12px">Open any policy on a deal, expand the <b>Commission</b> section, and enter rate or flat amount.</div>
+          <div style="font-size:12px">Open any policy on a deal, expand the <b>Commission</b> section, and pick a USHA product.</div>
         </div>
       `}
     </div>`;
@@ -8482,9 +9384,23 @@ function renderCRMRenewals() {
   // Sort each bucket ascending by renewal date
   Object.values(buckets).forEach(arr => arr.sort((a,b) => (a.renewal_date || '').localeCompare(b.renewal_date || '')));
 
-  const renderBucket = (title, color, policies, meta = '') => {
+  const renewalAccessors = {
+    client:  p => {
+      const c = crmContacts.find(c => c.id === p.contact_id);
+      return c ? ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || '') : '';
+    },
+    carrier: p => (p.carrier || '') + ' ' + (p.plan_name || ''),
+    renewal: p => p.renewal_date || '',
+    days:    p => p.renewal_date ? Math.floor((new Date(p.renewal_date + 'T00:00:00') - today) / oneDay) : 9999
+  };
+
+  const renderBucket = (title, color, policies, bucketKey, meta = '') => {
     if (!policies.length) return '';
-    const rows = policies.map(p => {
+    const tableKey = `renewals_${bucketKey}`;
+    // Default sort: ascending by days (soonest first)
+    if (!crmTableSorts[tableKey]) crmTableSorts[tableKey] = { col: 'days', dir: 'asc' };
+    const sorted = applyTableSort(policies, tableKey, renewalAccessors, 'days', 'asc');
+    const rows = sorted.map(p => {
       const contact = crmContacts.find(c => c.id === p.contact_id);
       const name = contact ? ([contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || '—') : '—';
       const daysOut = Math.floor((new Date(p.renewal_date + 'T00:00:00') - today) / oneDay);
@@ -8511,15 +9427,15 @@ function renderCRMRenewals() {
           <span style="font-size:11px;color:var(--muted);font-weight:400;background:rgba(253,199,47,0.08);border:1px solid rgba(253,199,47,0.2);padding:2px 8px;border-radius:10px">${policies.length}</span>
           ${meta ? `<span style="font-size:11px;color:var(--muted);font-weight:400">${meta}</span>` : ''}
           <div style="flex:1"></div>
-          <button class="btn-ghost" style="padding:5px 12px;font-size:11px;width:auto;margin:0" onclick="createBulkRenewalTasks('${Object.keys(buckets).find(k => buckets[k] === policies)}')">Create tasks for all</button>
+          <button class="btn-ghost" style="padding:5px 12px;font-size:11px;width:auto;margin:0" onclick="createBulkRenewalTasks('${bucketKey}')">Create tasks for all</button>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead>
             <tr style="border-bottom:1px solid var(--border)">
-              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Client</th>
-              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier / Plan</th>
-              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Renewal Date</th>
-              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">When</th>
+              ${sortableHeader(tableKey,'client','Client','left')}
+              ${sortableHeader(tableKey,'carrier','Carrier / Plan','left')}
+              ${sortableHeader(tableKey,'renewal','Renewal Date','left')}
+              ${sortableHeader(tableKey,'days','When','left')}
               <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Task</th>
             </tr>
           </thead>
@@ -8560,12 +9476,12 @@ function renderCRMRenewals() {
         </div>
       </div>
 
-      ${renderBucket('Overdue renewals', 'var(--error)', buckets.overdue)}
-      ${renderBucket('Due in 30 days', 'var(--yellow)', buckets['30'])}
-      ${renderBucket('Due in 31–60 days', 'var(--yellow)', buckets['60'])}
-      ${renderBucket('Due in 61–90 days', 'var(--white)', buckets['90'])}
-      ${renderBucket('OEP window', 'var(--yellow)', buckets.oep, oepMeta)}
-      ${renderBucket('Later than 90 days', 'var(--muted)', buckets.later)}
+      ${renderBucket('Overdue renewals', 'var(--error)', buckets.overdue, 'overdue')}
+      ${renderBucket('Due in 30 days', 'var(--yellow)', buckets['30'], '30')}
+      ${renderBucket('Due in 31–60 days', 'var(--yellow)', buckets['60'], '60')}
+      ${renderBucket('Due in 61–90 days', 'var(--white)', buckets['90'], '90')}
+      ${renderBucket('OEP window', 'var(--yellow)', buckets.oep, 'oep', oepMeta)}
+      ${renderBucket('Later than 90 days', 'var(--muted)', buckets.later, 'later')}
 
       ${totalUpcoming + buckets.overdue.length + buckets.oep.length === 0 ? `
         <div style="padding:40px;text-align:center;color:var(--muted)">
@@ -9339,12 +10255,1237 @@ async function logGmailThreadAsActivity(dealId, threadId) {
   }
 }
 
+// =====================================================================
+// YTD SALES TAB — production-side view (apps written, AV, taken rates,
+// pace vs. award targets). Distinct from Commissions which is $-side.
+// =====================================================================
+function renderCRMYTDSales() {
+  const body = document.getElementById('crmWorkspaceBody');
+  const fmt = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const today = new Date();
+  const year = getCRMYear();
+  const yStart = new Date(year, 0, 1);
+  const yEnd   = new Date(year, 11, 31);
+  const h1End  = new Date(year, 6, 0); // June 30
+
+  const inYear = p => {
+    const d = parseLocalDate(p.effective_date || p.created_at);
+    return d && d >= yStart && d <= yEnd;
+  };
+  const inH1 = p => {
+    const d = parseLocalDate(p.effective_date || p.created_at);
+    return d && d >= yStart && d <= h1End;
+  };
+
+  // Status buckets
+  const ytdPolicies = (crmPolicies || []).filter(inYear);
+  const issued    = ytdPolicies.filter(p => p.status === 'active');
+  const pending   = ytdPolicies.filter(p => p.status === 'pending');
+  const declined  = ytdPolicies.filter(p => ['declined','not_taken','withdrawn'].includes(p.status));
+  const cancelled = ytdPolicies.filter(p => ['cancelled','lapsed','expired'].includes(p.status));
+  const submitted = ytdPolicies.filter(p => p.status !== 'pending'); // anything that's been decided
+
+  // AV calc — issued + pending only (what's on the books)
+  const issuedAV  = (issued.concat(pending)).reduce((a,p) => a + ((Number(p.monthly_premium) || 0) * 12), 0);
+  const submittedAV = ytdPolicies.reduce((a,p) => a + ((Number(p.monthly_premium) || 0) * 12), 0);
+
+  // Per-channel rollup (issued + pending only)
+  const channelAV = { underwritten: 0, sgi: 0, supplemental: 0, asc: 0, other: 0 };
+  const channelCount = { underwritten: 0, sgi: 0, supplemental: 0, asc: 0, other: 0 };
+  for (const p of issued.concat(pending)) {
+    const cat = ushaCategoryForPolicy(p) || 'other';
+    channelAV[cat] = (channelAV[cat] || 0) + ((Number(p.monthly_premium) || 0) * 12);
+    channelCount[cat] = (channelCount[cat] || 0) + 1;
+  }
+
+  // Apps by month (counts of submitted)
+  const monthlyCounts = {};
+  for (let m = 0; m <= today.getMonth(); m++) {
+    const k = m + 1;
+    monthlyCounts[k] = { issued: 0, declined: 0, total: 0 };
+  }
+  for (const p of ytdPolicies) {
+    const d = parseLocalDate(p.effective_date || p.submit_date || p.created_at);
+    if (!d) continue;
+    if (d.getFullYear() !== year) continue;
+    const m = d.getMonth() + 1;
+    if (!monthlyCounts[m]) monthlyCounts[m] = { issued: 0, declined: 0, total: 0 };
+    monthlyCounts[m].total++;
+    if (p.status === 'active') monthlyCounts[m].issued++;
+    else if (['declined','not_taken','withdrawn'].includes(p.status)) monthlyCounts[m].declined++;
+  }
+
+  // Auto Taken Rates
+  const tr = computeAutoTakenRates();
+
+  // Targets
+  const vipSgiCount = issued.concat(pending).filter(p => ushaCategoryForPolicy(p) === 'sgi' && inH1(p)).length;
+  const vbsUwAV     = issued.concat(pending).filter(p => ushaCategoryForPolicy(p) === 'underwritten' && inH1(p))
+                                  .reduce((a,p) => a + ((Number(p.monthly_premium) || 0) * 12), 0);
+  const councilAV   = issuedAV;
+
+  // Top clients by AV
+  const byClient = {};
+  for (const p of issued.concat(pending)) {
+    const c = crmContacts.find(c => c.id === p.contact_id);
+    if (!c) continue;
+    const k = c.id;
+    if (!byClient[k]) byClient[k] = { name: [c.first_name, c.last_name].filter(Boolean).join(' '), av: 0, count: 0 };
+    byClient[k].av += (Number(p.monthly_premium) || 0) * 12;
+    byClient[k].count++;
+  }
+  const topClients = Object.values(byClient).sort((a,b) => b.av - a.av).slice(0, 10);
+
+  const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const maxMonthly = Math.max(1, ...Object.values(monthlyCounts).map(m => m.total));
+
+  const channelBars = [
+    ['underwritten', 'Underwritten', 'var(--yellow)'],
+    ['sgi',          'SGI',          'var(--success)'],
+    ['supplemental', 'Supplemental', 'var(--white)'],
+    ['asc',          'ASC',          'rgba(253,199,47,0.6)']
+  ];
+  const totalAVForBars = Object.values(channelAV).reduce((a,v) => a+v, 0) || 1;
+
+  const pct = (n, target) => Math.min(100, Math.round((n / target) * 100));
+  const bar = (current, target, color) => `
+    <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;margin-top:4px">
+      <div style="height:100%;width:${pct(current,target)}%;background:${color};border-radius:4px"></div>
+    </div>`;
+
+  // Year switcher + Upload Paycheck for the YTD Sales tab
+  const _yr = getCRMYear();
+  const lastCheck = (Array.isArray(crmPaychecks) && crmPaychecks.length) ? crmPaychecks[0] : null;
+  const lastCheckLabel = lastCheck
+    ? `Last paycheck: ${lastCheck.period_end} (${crmPaychecks.length} on file)`
+    : 'No paychecks uploaded yet';
+  const yearSwitcher = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;align-items:center;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:4px 6px">
+          <span style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;padding:0 6px">Year</span>
+          ${[2025, 2026].map(y => `
+            <button onclick="setCRMYear(${y})" style="padding:5px 12px;font-size:12px;border:none;border-radius:5px;cursor:pointer;background:${_yr === y ? 'var(--yellow)' : 'transparent'};color:${_yr === y ? 'var(--navy)' : 'var(--muted)'};font-weight:${_yr === y ? '600' : '400'}">${y}</button>
+          `).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--muted)">${lastCheckLabel}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-ghost" style="width:auto;padding:8px 16px;margin-top:0;font-size:13px" onclick="openSalesUploadModal()">📊 Upload Sales Export</button>
+        <button class="btn-primary" style="width:auto;padding:8px 16px;margin-top:0;font-size:13px" onclick="openPaycheckUploadModal()">📄 Upload Paycheck PDF</button>
+      </div>
+    </div>
+    ${_yr !== 2026 && ytdPolicies.length === 0 ? `<div style="font-size:11px;color:var(--yellow);background:rgba(253,199,47,0.06);border:1px solid rgba(253,199,47,0.2);border-radius:6px;padding:6px 12px;margin-bottom:12px">No ${_yr} sales imported — upload a ${_yr} sales export to populate this view.</div>` : ''}`;
+
+  body.innerHTML = `
+    <div style="padding:20px">
+      ${yearSwitcher}
+      <!-- Top KPI strip -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:14px">
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Issued AV</div>
+          <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(issuedAV)}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${issued.length} active + ${pending.length} pending</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Submitted AV</div>
+          <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(submittedAV)}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${ytdPolicies.length} apps total YTD</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">UW Taken Rate</div>
+          <div style="font-size:26px;font-family:'Playfair Display',serif;color:${tr.uwTR != null && tr.uwTR >= 60 ? 'var(--success)' : 'var(--yellow)'}">${tr.uwTR != null ? tr.uwTR.toFixed(1) + '%' : '—'}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${tr.uwIssued}/${tr.uwSubmitted} issued · target ≥60%</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">SGI Taken Rate</div>
+          <div style="font-size:26px;font-family:'Playfair Display',serif;color:${tr.sgiTR != null && tr.sgiTR >= 65 ? 'var(--success)' : 'var(--yellow)'}">${tr.sgiTR != null ? tr.sgiTR.toFixed(1) + '%' : '—'}${tr.sgiFixed ? '<span style="font-size:11px;color:var(--muted);margin-left:4px">fixed</span>' : ''}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${tr.sgiIssued}/${tr.sgiSubmitted} issued · target ≥65%</div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Status Mix</div>
+          <div style="font-size:13px;color:var(--white);line-height:1.6">
+            <div><span style="color:var(--success);font-weight:600">${issued.length}</span> issued</div>
+            <div><span style="color:var(--yellow);font-weight:600">${pending.length}</span> pending</div>
+            <div><span style="color:var(--muted);font-weight:600">${declined.length}</span> declined/withdrawn</div>
+            <div><span style="color:var(--error);font-weight:600">${cancelled.length}</span> cancelled</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pace toward award targets -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:14px">Pace toward 2026 Award Targets</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+              <div style="font-size:13px;color:var(--success);font-weight:600">VIP — SGI apps (H1)</div>
+              <div style="font-size:18px;color:var(--success);font-weight:600;font-family:'Playfair Display',serif">${vipSgiCount} / 20</div>
+            </div>
+            ${bar(vipSgiCount, 20, 'var(--success)')}
+            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">$3M pool · need 20+ Issued SGI Base Health apps + ≥65% SGI TR by Jun 30</div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+              <div style="font-size:13px;color:var(--yellow);font-weight:600">VBS — UW Issued AV (H1)</div>
+              <div style="font-size:18px;color:var(--yellow);font-weight:600;font-family:'Playfair Display',serif">${fmt(vbsUwAV)} / ${fmt(300000)}</div>
+            </div>
+            ${bar(vbsUwAV, 300000, 'var(--yellow)')}
+            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">$9M pool · need $300K UW Issued AV + ≥60% UW TR by Jun 30</div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+              <div style="font-size:13px;color:var(--white);font-weight:600">Council — Total Issued AV (FY)</div>
+              <div style="font-size:18px;color:var(--white);font-weight:600;font-family:'Playfair Display',serif">${fmt(councilAV)} / ${fmt(1000000)}</div>
+            </div>
+            ${bar(councilAV, 1000000, 'var(--white)')}
+            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">Council of Excellence · $1M Issued AV + ≥60% UW + ≥65% SGI TR by Dec 31</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Apps by month -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:10px">Apps Submitted by Month</div>
+        <div style="display:flex;align-items:flex-end;gap:8px;height:160px;padding:6px 0;border-bottom:1px solid var(--border)">
+          ${Object.entries(monthlyCounts).map(([m,c]) => {
+            const h = Math.round((c.total / maxMonthly) * 130);
+            const issuedH = Math.round((c.issued / maxMonthly) * 130);
+            return `
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="font-size:11px;color:var(--muted)">${c.total}</div>
+                <div style="width:100%;max-width:42px;height:130px;display:flex;flex-direction:column-reverse;align-items:stretch">
+                  <div style="background:var(--success);height:${issuedH}px;border-radius:3px 3px 0 0" title="${c.issued} issued"></div>
+                  <div style="background:var(--muted);opacity:0.4;height:${h - issuedH}px;border-radius:0" title="${c.total - c.issued} not-issued"></div>
+                </div>
+                <div style="font-size:11px;color:var(--muted)">${monthLabels[parseInt(m)-1]}</div>
+              </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted)">
+          <div><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Issued</div>
+          <div><span style="display:inline-block;width:10px;height:10px;background:var(--muted);opacity:0.4;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Declined / Withdrawn / Pending</div>
+        </div>
+      </div>
+
+      <!-- Channel mix -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:10px">Issued AV by Channel</div>
+        ${channelBars.map(([key, label, color]) => {
+          const av = channelAV[key] || 0;
+          const ct = channelCount[key] || 0;
+          const p = totalAVForBars > 0 ? Math.round((av/totalAVForBars)*100) : 0;
+          return `
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                <div style="color:${color};font-weight:600">${label}</div>
+                <div style="color:var(--muted)">${ct} polic${ct === 1 ? 'y' : 'ies'} · ${fmt(av)} (${p}%)</div>
+              </div>
+              <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+                <div style="height:100%;width:${p}%;background:${color};border-radius:4px"></div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+
+      <!-- Top clients -->
+      ${topClients.length ? `
+        <div class="card">
+          <div class="card-title" style="margin-bottom:10px">Top 10 Clients by Issued AV (2026)</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Client</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Policies</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Issued AV</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${topClients.map(c => `
+                <tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:8px 10px">${escapeHTML(c.name || '—')}</td>
+                  <td style="padding:8px 10px;text-align:right;color:var(--muted)">${c.count}</td>
+                  <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt(c.av)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div style="padding:40px;text-align:center;color:var(--muted)">
+          <div style="font-size:14px;color:var(--white);margin-bottom:8px">No 2026 sales tracked yet</div>
+          <div style="font-size:12px">Click <strong>Commissions → 📥 Review &amp; Import</strong> to load your 2026 sales export.</div>
+        </div>
+      `}
+    </div>`;
+}
+
 // Called once after the page loads to kick off GIS.
 window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
 
 // =====================================================================
 // END CRM LAYER
 // =====================================================================
+
+// =====================================================================
+// 2026 BULK IMPORT — embedded sales data + one-shot importer
+// Generated 2026-04-26 from EmanuelGreco_2026_Clients_and_Commissions.xlsx
+// Schema: [appId, firstName, lastName, productLabel, commissionProduct, category,
+//          status, effectiveDate, submitDate, monthlyPremium]
+// =====================================================================
+
+const BULK_IMPORT_2026_ROWS = [["52Y249522F","Hunter","Flanigan","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-23","2026-04-22",116.11],["52Y249522G","Hunter","Flanigan","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-23","2026-04-22",45.0],["52Y249522L","Hunter","Flanigan","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-04-23","2026-04-22",36.12],["72G219595S","Hunter","Flanigan","AIBCEXECDIAMOND 2015","usha_asc:tier_6_exec_diamond","asc","active","2026-04-23","2026-04-22",93.28],["52Y244644F","Lucero","Sanchez","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-16","2026-04-16",278.82],["52Y244644G","Lucero","Sanchez","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-16","2026-04-16",13.3],["52Y243507B","Melissa","Bernales","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-15","2026-04-15",114.05],["52Y243507C","Melissa","Bernales","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-15","2026-04-15",14.93],["52Y243507D","Melissa","Bernales","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-15","2026-04-15",35.38],["52Y243507G","Melissa","Bernales","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-15","2026-04-15",30.0],["52Y243690B","Lila","Hayes","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-20","2026-04-15",141.43],["52Y243690C","Lila","Hayes","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-20","2026-04-15",14.09],["52Y243690D","Lila","Hayes","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-20","2026-04-15",14.46],["52Y243690G","Lila","Hayes","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-20","2026-04-15",34.95],["52Y243690J","Lila","Hayes","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-20","2026-04-15",10.94],["52Y243690L","Lila","Hayes","SECUREDENTALPLUS LOW","usha:securedentalplus_low","supplemental","active","2026-04-20","2026-04-15",25.59],["52Y244151B","Nicholas","George","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-16","2026-04-15",94.43],["52Y244151C","Nicholas","George","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-16","2026-04-15",29.94],["52Y244151D","Nicholas","George","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-04-16","2026-04-15",46.82],["52Y244151G","Nicholas","George","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-16","2026-04-15",65.0],["52Y244151J","Nicholas","George","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-16","2026-04-15",12.15],["52Y244151L","Nicholas","George","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-16","2026-04-15",41.96],["72G216125S","Lila","Hayes","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-20","2026-04-15",66.28],["72G216394S","Nicholas","George","AIBCEXECDIAMOND 2015","usha_asc:tier_6_exec_diamond","asc","active","2026-04-16","2026-04-15",93.28],["52Y240352F","Mateo","Hernandez","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-13","2026-04-10",152.45],["52Y240352G","Mateo","Hernandez","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-13","2026-04-10",21.6],["70S369459P","Mateo","Hernandez","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","active","2026-04-13","2026-04-10",66.28],["52Y237011F","Jakari","Colenberg","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-05-01","2026-04-08",105.87],["52Y237011G","Jakari","Colenberg","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-05-01","2026-04-08",25.0],["72G212444S","Jakari","Colenberg","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-05-01","2026-04-08",62.95],["52Y234266G","Carolyn","Raymond","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-10","2026-04-06",34.44],["52Y234266H","Carolyn","Raymond","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-10","2026-04-06",29.96],["52Y234266J","Carolyn","Raymond","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-10","2026-04-06",12.15],["52Y234266L","Carolyn","Raymond","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-10","2026-04-06",47.69],["55P030267F","Jessica","Sexton","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-15","2026-04-06",616.23],["55P030267G","Jessica","Sexton","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-04-15","2026-04-06",90.0],["72G211480S","Carolyn","Raymond","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-04-10","2026-04-06",8.78],["72G211725S","Jessica","Sexton","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-15","2026-04-06",66.28],["52Y232139F","Anthony","Yoshino","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-09","2026-04-05",547.4],["52Y232139G","Anthony","Yoshino","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-09","2026-04-05",69.53],["55P030233F","Shannon","Mellenberger","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-04","2026-04-04",146.0],["55P030233G","Shannon","Mellenberger","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-04","2026-04-04",21.6],["72G211016S","Shannon","Mellenberger","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-04","2026-04-04",66.28],["52Y230748L","Lazaro","Perez","SECUREDENTAL HIGH","usha:securedental_high","supplemental","active","2026-04-06","2026-04-03",45.78],["70S368864P","Lazaro","Perez","SCARUBY 2015","usha_asc:sca_tier_2_ruby","asc","active","2026-04-06","2026-04-03",36.28],["52Y228903F","Sateesh","Konapalli","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-02","2026-04-02",223.36],["52Y228903G","Sateesh","Konapalli","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-02","2026-04-02",23.15],["52Y228903J","Sateesh","Konapalli","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-02","2026-04-02",12.15],["52Y228903L","Sateesh","Konapalli","HA-SECDENTPLUS MED","usha:ha_secdentplus_med","supplemental","active","2026-04-02","2026-04-02",39.56],["75GUV26730","Sateesh","Konapalli","ABCEXECUTIVE2020","usha_asc:abcexecutive","asc","active","2026-04-02","2026-04-02",58.28],["02N226639F","Linda","Ketcham","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-15","2026-04-01",438.02],["02N226639G","Linda","Ketcham","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-15","2026-04-01",45.27],["02N226639H","Linda","Ketcham","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-15","2026-04-01",35.75],["52Y226979J","Michelle","Skaggs","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-02","2026-04-01",24.3],["52Y226979L","Michelle","Skaggs","SECUREDENTAL HIGH","usha:securedental_high","supplemental","active","2026-04-02","2026-04-01",62.44],["52Y227736L","Julio","Rivas","SECUREDENTAL MEDIUM","usha:securedental_med","supplemental","active","2026-04-06","2026-04-01",31.04],["72G209301S","Michelle","Skaggs","AIBCRUBY 2015","usha_asc:tier_2_ruby","asc","active","2026-04-02","2026-04-01",36.28],["72G209701S","Julio","Rivas","AIBCRUBY 2015","usha_asc:tier_2_ruby","asc","active","2026-04-06","2026-04-01",32.95],["52Y226120F","Patrick","Condon","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-03","2026-03-31",726.04],["52Y226120G","Patrick","Condon","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-03","2026-03-31",24.27],["75GUV22080","Patrick","Condon","ABCENTREPRENEUR2020","usha_asc:abcentrepreneur","asc","active","2026-04-03","2026-03-31",43.28],["52Y223483F","Fariba","Myers","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-01","2026-03-28",618.2],["52Y223483G","Fariba","Myers","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-28",38.41],["52Y223483H","Fariba","Myers","ACCIDENT BENEFIT FAM","usha:accident_benefit_fam","supplemental","active","2026-04-01","2026-03-28",34.46],["52Y222921F","Bethany","Lachenman","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-27","2026-03-27",654.5],["52Y222921G","Bethany","Lachenman","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-03-27","2026-03-27",30.0],["52Y223017G","George","Lightsey","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-06","2026-03-27",48.97],["52Y223017H","George","Lightsey","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-06","2026-03-27",41.21],["52Y223017J","George","Lightsey","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-06","2026-03-27",12.15],["52Y223017L","George","Lightsey","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-04-06","2026-03-27",38.41],["72G206871S","Bethany","Lachenman","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-27","2026-03-27",66.28],["72G206929S","George","Lightsey","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-04-06","2026-03-27",8.78],["52Y220283F","Jo","Stutts","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-01","2026-03-25",477.85],["52Y220283G","Jo","Stutts","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-25",45.27],["52Y221139F","Leroy","Luckey","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-08","2026-03-25",424.74],["52Y221139G","Leroy","Luckey","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-08","2026-03-25",20.0],["52Y221139J","Leroy","Luckey","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-08","2026-03-25",27.49],["52Y221139L","Leroy","Luckey","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-08","2026-03-25",119.27],["72G205767S","Leroy","Luckey","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-08","2026-03-25",66.28],["75GUV11100","Jo","Stutts","ABCENTREPRENEUR2020","usha_asc:abcentrepreneur","asc","active","2026-04-01","2026-03-25",43.28],["52Y217865B","Chastity","Muir","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-17","2026-03-23",263.37],["52Y217865C","Chastity","Muir","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-17","2026-03-23",14.3],["52Y217865D","Chastity","Muir","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-17","2026-03-23",31.02],["52Y217865G","Chastity","Muir","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-17","2026-03-23",25.0],["52Y217865J","Chastity","Muir","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-17","2026-03-23",12.15],["52Y217865L","Chastity","Muir","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-04-17","2026-03-23",27.74],["72G203829S","Chastity","Muir","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-17","2026-03-23",66.28],["52Y213932B","Jenson","Hall","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-23","2026-03-17",178.09],["52Y213932C","Jenson","Hall","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-23","2026-03-17",57.55],["52Y213932D","Jenson","Hall","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-04-23","2026-03-17",71.08],["52Y213932G","Jenson","Hall","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-04-23","2026-03-17",20.0],["52Y213932J","Jenson","Hall","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-23","2026-03-17",15.16],["52Y213932L","Jenson","Hall","SECUREDENTALPLUS LOW","usha:securedentalplus_low","supplemental","active","2026-04-23","2026-03-17",50.92],["72G201413S","Jenson","Hall","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-23","2026-03-17",66.28],["52Y212586B","George","Lightsey","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-01","2026-03-16",95.2],["52Y212586C","George","Lightsey","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-01","2026-03-16",57.33],["52Y212586D","George","Lightsey","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-04-01","2026-03-16",35.53],["52Y212586G","George","Lightsey","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-16",35.0],["72G200577S","George","Lightsey","AIBCEXECDIAMOND 2015","usha_asc:tier_6_exec_diamond","asc","active","2026-04-01","2026-03-16",93.28],["52Y211192B","Jhon","Castellanos","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-01","2026-03-14",137.29],["52Y211192C","Jhon","Castellanos","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-01","2026-03-14",48.43],["52Y211192D","Jhon","Castellanos","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-04-01","2026-03-14",37.92],["52Y211192G","Jhon","Castellanos","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-14",20.0],["52Y211192H","Jhon","Castellanos","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-01","2026-03-14",29.96],["52Y211192L","Jhon","Castellanos","SECUREDENTALPLUS LOW","usha:securedentalplus_low","supplemental","active","2026-04-01","2026-03-14",25.46],["52Y199955H","Melvin","Morlas Gonzales","ACCIDENT BENEFIT FAM","usha:accident_benefit_fam","supplemental","active","2026-04-01","2026-03-12",43.35],["02N225005F","Olivia","Hilke","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-17","2026-03-11",141.41],["02N225005G","Olivia","Hilke","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-17","2026-03-11",20.0],["02N225005L","Olivia","Hilke","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-17","2026-03-11",39.24],["52Y198525B","Courtnee","Casados","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-03-12","2026-03-11",357.23],["52Y198525C","Courtnee","Casados","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-03-12","2026-03-11",84.97],["52Y198525D","Courtnee","Casados","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-03-12","2026-03-11",122.82],["52Y198525G","Courtnee","Casados","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-03-12","2026-03-11",85.0],["52Y198525J","Courtnee","Casados","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-12","2026-03-11",17.14],["52Y198525L","Courtnee","Casados","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-03-12","2026-03-11",94.21],["72G198181S","Courtnee","Casados","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-12","2026-03-11",66.28],["72G198230S","Olivia","Hilke","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-17","2026-03-11",66.28],["52Y195687B","Kevin","Harris","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-01","2026-03-09",53.06],["52Y195687C","Kevin","Harris","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-01","2026-03-09",21.53],["52Y195687D","Kevin","Harris","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-01","2026-03-09",17.02],["52Y195687G","Kevin","Harris","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-09",30.0],["52Y195687L","Kevin","Harris","SECUREDENTAL MEDIUM","usha:securedental_med","supplemental","active","2026-04-01","2026-03-09",30.75],["52Y196215B","Brittany","Chase","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-03-10","2026-03-09",154.73],["52Y196215C","Brittany","Chase","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-03-10","2026-03-09",14.09],["52Y196215D","Brittany","Chase","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-03-10","2026-03-09",14.46],["72G196789S","Brittany","Chase","AIBCSAPPHIRE 2015","usha_asc:tier_4_sapphire","asc","active","2026-03-10","2026-03-09",46.28],["52Y195308J","Richard","Joyner","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-01","2026-03-08",59.36],["72G196244S","Richard","Joyner","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-04-01","2026-03-08",8.78],["52Y194954F","Jennifer","Lachenman","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-11","2026-03-07",455.66],["52Y194954G","Jennifer","Lachenman","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-03-11","2026-03-07",35.0],["52Y194954J","Jennifer","Lachenman","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-11","2026-03-07",12.15],["52Y194954L","Jennifer","Lachenman","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-03-11","2026-03-07",42.38],["72G195985S","Jennifer","Lachenman","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-11","2026-03-07",66.28],["52Y190111F","Kurukulasuriya Nishini","Fernando","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-01","2026-03-02",145.88],["52Y190111G","Kurukulasuriya Nishini","Fernando","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-02",30.0],["52Y190111J","Kurukulasuriya Nishini","Fernando","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-01","2026-03-02",12.15],["70S365526P","Kurukulasuriya Nishini","Fernando","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","active","2026-04-01","2026-03-02",66.28],["52Y180799F","Antonio","Lewis","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-02-20","2026-02-20",239.54],["52Y180799G","Antonio","Lewis","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-02-20","2026-02-20",16.86],["52Y180147F","Manogna","Pilli","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-05","2026-02-19",346.4],["72G187117S","Manogna","Pilli","AIBCSAPPHIRE 2015","usha_asc:tier_4_sapphire","asc","active","2026-03-05","2026-02-19",46.28],["02N223168F","Megan","Wood","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-01","2026-02-17",136.12],["52Y177753F","Brenda","Jepkoech","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-02-18","2026-02-17",279.31],["52Y177753J","Brenda","Jepkoech","PREMIERVISION","usha:premier_vision","supplemental","active","2026-02-18","2026-02-17",13.12],["52Y177753L","Brenda","Jepkoech","HA-SECDENTPLUS MED","usha:ha_secdentplus_med","supplemental","active","2026-02-18","2026-02-17",36.62],["72G185263S","Megan","Wood","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-01","2026-02-17",66.28],["75GUU51240","Brenda","Jepkoech","ABCEXECUTIVE2020","usha_asc:abcexecutive","asc","active","2026-02-18","2026-02-17",58.28],["02N223122F","Emily","Wood","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-03-01","2026-02-16",327.91],["02N223122H","Emily","Wood","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-03-01","2026-02-16",35.75],["02N223122J","Emily","Wood","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-01","2026-02-16",12.15],["52Y176038J","Diane","Baus","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-01","2026-02-16",12.15],["52Y176038L","Diane","Baus","SECUREDENTAL HIGH","usha:securedental_high","supplemental","active","2026-03-01","2026-02-16",34.68],["72G184729S","Diane","Baus","AIBCRUBY 2015","usha_asc:tier_2_ruby","asc","active","2026-03-01","2026-02-16",36.28],["52Y175243B","Michael","Wajchert","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-03-01","2026-02-14",432.37],["52Y175243C","Michael","Wajchert","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-03-01","2026-02-14",92.9],["52Y175243D","Michael","Wajchert","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-03-01","2026-02-14",276.91],["72G184207S","Michael","Wajchert","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-01","2026-02-14",66.28],["52Y162795F","Carlos","Spencer","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","lapsed","2026-02-04","2026-01-31",0],["52Y162795J","Carlos","Spencer","PREMIERVISION","usha:premier_vision","supplemental","lapsed","2026-02-04","2026-01-31",0],["70S362424P","Carlos","Spencer","SCAEMERALD 2015","usha_asc:sca_tier_3_emerald","asc","lapsed","2026-02-04","2026-01-31",3.33],["52Y156485B","Laura","Bessey","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-02-01","2026-01-24",402.39],["52Y156485C","Laura","Bessey","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-02-01","2026-01-24",78.59],["52Y156485D","Laura","Bessey","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-02-01","2026-01-24",71.86],["52Y156485G","Laura","Bessey","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-02-01","2026-01-24",90.01],["70S361661P","Laura","Bessey","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","active","2026-02-01","2026-01-24",66.28],["52Y155209B","Mike","Jaworski","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-02-01","2026-01-23",279.56],["52Y155209C","Mike","Jaworski","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-02-01","2026-01-23",14.3],["52Y155209D","Mike","Jaworski","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-02-01","2026-01-23",25.85],["52Y155362B","Victoria","Kroeger","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","cancelled","2026-02-01","2026-01-23",0],["52Y155362C","Victoria","Kroeger","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","cancelled","2026-02-01","2026-01-23",0],["52Y155362D","Victoria","Kroeger","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","cancelled","2026-02-01","2026-01-23",0],["52Y155362G","Victoria","Kroeger","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","cancelled","2026-02-01","2026-01-23",0],["52Y155741F","Deborahn","Holmes","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-02-23","2026-01-23",0],["52Y155741G","Deborahn","Holmes","CRITICAL ILLNESS","usha:critical_illness","supplemental","not_taken","2026-02-23","2026-01-23",0],["52Y155741J","Deborahn","Holmes","PREMIERVISION","usha:premier_vision","supplemental","not_taken","2026-02-23","2026-01-23",0],["52Y155741L","Deborahn","Holmes","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","not_taken","2026-02-23","2026-01-23",0],["52Y155944B","Melanie","Ried","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-03-01","2026-01-23",71.07],["52Y155944C","Melanie","Ried","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-03-01","2026-01-23",39.38],["52Y155944D","Melanie","Ried","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-03-01","2026-01-23",27.57],["72G172556S","Mike","Jaworski","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-02-01","2026-01-23",66.28],["72G172638S","Victoria","Kroeger","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","cancelled","2026-02-01","2026-01-23",3.33],["72G172939S","Melanie","Ried","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-01","2026-01-23",66.28],["52Y153012B","Ezoza","Bahronova","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","not_taken","2026-01-24","2026-01-21",0],["52Y153012C","Ezoza","Bahronova","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","not_taken","2026-01-24","2026-01-21",0],["52Y153012D","Ezoza","Bahronova","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","not_taken","2026-01-24","2026-01-21",0],["52Y153012G","Ezoza","Bahronova","CRITICAL ILLNESS","usha:critical_illness","supplemental","not_taken","2026-01-24","2026-01-21",0],["52Y153012L","Ezoza","Bahronova","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","not_taken","2026-01-24","2026-01-21",0],["72G171393S","Ezoza","Bahronova","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-01-24","2026-01-21",3.33],["52Y149646H","Carol","Doyle","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-02-01","2026-01-17",14.96],["52Y149646J","Carol","Doyle","PREMIERVISION","usha:premier_vision","supplemental","active","2026-02-01","2026-01-17",12.15],["52Y149646L","Carol","Doyle","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-02-01","2026-01-17",29.8],["72G169781S","Carol","Doyle","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-02-01","2026-01-17",8.78],["52Y147590F","Davon","Knight","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-01-19","2026-01-16",0],["52Y147590G","Davon","Knight","CRITICAL ILLNESS","usha:critical_illness","supplemental","not_taken","2026-01-19","2026-01-16",0],["70S360841P","Davon","Knight","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","not_taken","2026-01-19","2026-01-16",3.33],["52Y146570F","Ashley","Hall","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-02-01","2026-01-15",194.16],["52Y146570G","Ashley","Hall","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-02-01","2026-01-15",20.0],["72G168255S","Ashley","Hall","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-02-01","2026-01-15",66.28],["52Y142879F","Eric","Baron","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-02-01","2026-01-13",0],["52Y142879G","Eric","Baron","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","not_taken","2026-02-01","2026-01-13",0],["72G165502S","Eric","Baron","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-02-01","2026-01-13",3.33],["52Y141873F","Edgar","Garcia","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-01-15","2026-01-12",0],["52Y141873L","Edgar","Garcia","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","not_taken","2026-01-15","2026-01-12",0],["72G164749S","Edgar","Garcia","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-01-15","2026-01-12",3.33],["52Y139920B","Benjamin","Miller","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-02-02","2026-01-09",88.52],["52Y139920C","Benjamin","Miller","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-02-02","2026-01-09",47.4],["52Y139920D","Benjamin","Miller","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-02-02","2026-01-09",24.66],["52Y139920G","Benjamin","Miller","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-02-02","2026-01-09",35.0],["72G163301S","Benjamin","Miller","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-02-02","2026-01-09",66.28],["52Y138755L","Nabihah","Greco","SECUREDENTAL HIGH","usha:securedental_high","supplemental","cancelled","2026-01-08","2026-01-08",0],["70S359384P","Nabihah","Greco","SCARUBY 2015","usha_asc:sca_tier_2_ruby","asc","cancelled","2026-01-08","2026-01-08",0],["52Y131852B","Mark","Morgan","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-01-01","2025-12-30",362.0],["52Y131852C","Mark","Morgan","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-01-01","2025-12-30",117.36],["52Y131852D","Mark","Morgan","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-01-01","2025-12-30",93.52],["52Y132494B","Evon","Royal","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-01-28","2025-12-30",214.24],["52Y132494C","Evon","Royal","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-01-28","2025-12-30",82.84],["52Y132494D","Evon","Royal","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-01-28","2025-12-30",65.64],["52Y132494G","Evon","Royal","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-01-28","2025-12-30",90.0],["52Y132494L","Evon","Royal","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-01-28","2025-12-30",80.66],["72G157113S","Mark","Morgan","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-01-01","2025-12-30",66.28],["72G157604S","Evon","Royal","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-01-28","2025-12-30",66.28],["02N219098F","Oscar","Herrera","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-01-05","2025-12-28",222.23],["02N219098H","Oscar","Herrera","ACCIDENT BENEFIT FAM","usha:accident_benefit_fam","supplemental","active","2026-01-05","2025-12-28",49.46],["02N219098L","Oscar","Herrera","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-01-05","2025-12-28",91.2],["55P027923B","Benjamin","Chvojicek","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","not_taken","2026-01-01","2025-12-15",0],["55P027923C","Benjamin","Chvojicek","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","not_taken","2026-01-01","2025-12-15",0],["55P027923D","Benjamin","Chvojicek","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","not_taken","2026-01-01","2025-12-15",0],["55P027923G","Benjamin","Chvojicek","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","not_taken","2026-01-01","2025-12-15",0],["72G148772S","Benjamin","Chvojicek","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-01-01","2025-12-15",3.33]];
+
+const BULK_IMPORT_FIELDS = ['app_id','first_name','last_name','product_label','commission_product','category','status','effective_date','submit_date','monthly_premium'];
+function bulkImportRowToObj(r) {
+  const o = {}; BULK_IMPORT_FIELDS.forEach((k,i) => o[k] = r[i]);
+  return o;
+}
+
+// Open the import preview modal — counts + per-client list. User clicks Run to commit.
+function openBulk2026ImportModal() {
+  if (!crmClient || !crmUser) {
+    showToast('Sign in to the CRM first.', 'error');
+    return;
+  }
+  const rows = (typeof BULK_IMPORT_2026_ROWS !== 'undefined' ? BULK_IMPORT_2026_ROWS : []).map(bulkImportRowToObj);
+  if (!rows.length) { showToast('No bulk import data embedded.', 'error'); return; }
+
+  // Group by client (firstName + lastName, lowercase)
+  const byClient = {};
+  for (const r of rows) {
+    const key = `${(r.first_name||'').toLowerCase().trim()}|${(r.last_name||'').toLowerCase().trim()}`;
+    if (!byClient[key]) byClient[key] = { first: r.first_name, last: r.last_name, polCount: 0, av: 0, cats: new Set(), statuses: new Set() };
+    byClient[key].polCount++;
+    byClient[key].av += (Number(r.monthly_premium) || 0) * 12;
+    if (r.category) byClient[key].cats.add(r.category);
+    if (r.status) byClient[key].statuses.add(r.status);
+  }
+  const clientList = Object.values(byClient).sort((a,b) => b.av - a.av);
+
+  // Status & category summary
+  const byStatus = {};
+  const byCat = {};
+  for (const r of rows) {
+    byStatus[r.status] = (byStatus[r.status]||0) + 1;
+    byCat[r.category] = (byCat[r.category]||0) + 1;
+  }
+  const fmt = n => `$${(Number(n)||0).toLocaleString(undefined, {maximumFractionDigits:0})}`;
+
+  // Match preview against existing contacts
+  const existingByName = new Map();
+  for (const c of (crmContacts || [])) {
+    const k = `${(c.first_name||'').toLowerCase().trim()}|${(c.last_name||'').toLowerCase().trim()}`;
+    if (k.replace('|','')) existingByName.set(k, c);
+  }
+  let matchedClients = 0, newClients = 0;
+  for (const c of clientList) {
+    const k = `${(c.first||'').toLowerCase().trim()}|${(c.last||'').toLowerCase().trim()}`;
+    if (existingByName.has(k)) matchedClients++; else newClients++;
+  }
+
+  const clientRowsHTML = clientList.map(c => {
+    const k = `${(c.first||'').toLowerCase().trim()}|${(c.last||'').toLowerCase().trim()}`;
+    const matched = existingByName.has(k);
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px">${escapeHTML(c.first + ' ' + c.last)} ${matched ? '<span style="color:var(--success);font-size:10px;margin-left:6px">[MATCHED]</span>' : '<span style="color:var(--yellow);font-size:10px;margin-left:6px">[NEW]</span>'}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--muted)">${c.polCount}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--yellow);font-weight:600">${fmt(c.av)}</td>
+      <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${[...c.cats].join(', ')}</td>
+    </tr>`;
+  }).join('');
+
+  // Build modal body
+  const html = `
+    <div style="padding:8px 0">
+      <div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.25);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px">
+        <strong style="color:var(--success)">✓ Safe sync — nothing gets deleted.</strong> It will:
+        <ol style="margin:6px 0 0 16px;padding:0;font-size:12.5px;color:var(--muted)">
+          <li>Match existing policies by USHA AppID and <strong>update</strong> status, premium, dates in place (manual edits preserved)</li>
+          <li>For each NEW client, create a contact + a Won deal in the Sales pipeline</li>
+          <li><strong>Insert</strong> any policies in the export that don't already exist</li>
+          <li>Skip identical rows (no spam writes)</li>
+        </ol>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:6px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Total rows</div><div style="font-size:20px;font-weight:600">${rows.length}</div></div>
+        <div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:6px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Clients</div><div style="font-size:20px;font-weight:600">${clientList.length}</div></div>
+        <div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:6px"><div style="font-size:10px;color:var(--success);text-transform:uppercase">Matched</div><div style="font-size:20px;font-weight:600;color:var(--success)">${matchedClients}</div></div>
+        <div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:6px"><div style="font-size:10px;color:var(--yellow);text-transform:uppercase">Will create</div><div style="font-size:20px;font-weight:600;color:var(--yellow)">${newClients}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:6px;font-size:12px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">By Status</div>
+          ${Object.entries(byStatus).map(([s,c]) => `<div>${escapeHTML(s)}: <strong>${c}</strong></div>`).join('')}
+        </div>
+        <div style="background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:6px;font-size:12px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">By Category</div>
+          ${Object.entries(byCat).map(([s,c]) => `<div>${escapeHTML(s)}: <strong>${c}</strong></div>`).join('')}
+        </div>
+      </div>
+      <div style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead style="background:rgba(253,199,47,0.06);position:sticky;top:0">
+            <tr>
+              <th style="text-align:left;padding:8px;font-size:10px;text-transform:uppercase;color:var(--muted)">Client</th>
+              <th style="text-align:right;padding:8px;font-size:10px;text-transform:uppercase;color:var(--muted)">Policies</th>
+              <th style="text-align:right;padding:8px;font-size:10px;text-transform:uppercase;color:var(--muted)">AV</th>
+              <th style="text-align:left;padding:8px;font-size:10px;text-transform:uppercase;color:var(--muted)">Channels</th>
+            </tr>
+          </thead>
+          <tbody>${clientRowsHTML}</tbody>
+        </table>
+      </div>
+      <div id="bulk2026Progress" style="margin-top:12px;font-size:12.5px;color:var(--muted);display:none"></div>
+      <div id="bulk2026Error" style="margin-top:8px;font-size:12px;color:var(--error);display:none"></div>
+    </div>`;
+
+  showConfirm({
+    title: 'Sync 2026 Sales',
+    sub: `${rows.length} rows × ${clientList.length} clients — safe upsert, nothing gets deleted`,
+    body: html,
+    okText: 'Sync 2026 Policies',
+    cancelText: 'Cancel',
+    danger: false
+  }).then(ok => { if (ok) runBulk2026Import(rows); });
+}
+
+async function runBulk2026Import(rows) {
+  const owner_id = crmUser.id;
+
+  showToast('Syncing 2026 sales — preserving manual edits…');
+  // No wipe step — we upsert by USHA AppID instead so any manual edits you've made
+  // (custom notes, commission overrides, coverage_level changes, etc.) are preserved.
+
+  // 1) Build map of existing policies by USHA AppID (extracted from the notes prefix)
+  await loadCRMData();
+  const salesPipeline = (crmPipelines || []).find(p => (p.name||'').toLowerCase() === 'sales')
+    || crmPipelines[0];
+  if (!salesPipeline) { showToast('No Sales pipeline. Open CRM once to seed.', 'error'); return; }
+  const wonStage = (crmStages || []).find(s => s.pipeline_id === salesPipeline.id && s.is_won)
+    || (crmStages || []).find(s => s.pipeline_id === salesPipeline.id && (s.name||'').toLowerCase().includes('sold'));
+  if (!wonStage) { showToast('No Won stage in Sales pipeline.', 'error'); return; }
+
+  // 3) Group rows by client
+  const byClient = new Map();
+  for (const r of rows) {
+    const key = `${(r.first_name||'').toLowerCase().trim()}|${(r.last_name||'').toLowerCase().trim()}`;
+    if (!byClient.has(key)) byClient.set(key, { first: r.first_name, last: r.last_name, rows: [] });
+    byClient.get(key).rows.push(r);
+  }
+
+  // 4) Build name → contact_id map (existing)
+  const existingByName = new Map();
+  for (const c of (crmContacts || [])) {
+    const k = `${(c.first_name||'').toLowerCase().trim()}|${(c.last_name||'').toLowerCase().trim()}`;
+    if (k.replace('|','')) existingByName.set(k, c.id);
+  }
+
+  // Build app_id → existing policy map by extracting from `notes` prefix
+  // (e.g. "App ID: 52Y249522F · Submitted 2026-04-22"). Lets us update in place.
+  const existingByAppId = new Map();
+  for (const p of (crmPolicies || [])) {
+    const m = p.notes && p.notes.match(/^App ID:\s*([\w\d]+)/);
+    if (m) existingByAppId.set(m[1], p);
+  }
+
+  let contactsCreated = 0, dealsCreated = 0;
+  let policiesInserted = 0, policiesUpdated = 0, policiesUntouched = 0;
+  let errors = 0;
+  const errorList = [];
+
+  // 2) For each client: ensure contact + deal exist (idempotent — won't duplicate)
+  for (const [key, c] of byClient.entries()) {
+    let contactId = existingByName.get(key);
+    if (!contactId) {
+      // Create contact
+      try {
+        const { data: ins, error: cErr } = await crmClient
+          .from('contacts')
+          .insert({ owner_id, first_name: c.first, last_name: c.last, lead_source: 'USHA Lead' })
+          .select('id').single();
+        if (cErr) throw cErr;
+        contactId = ins.id;
+        contactsCreated++;
+      } catch (e) {
+        errors++;
+        errorList.push(`Contact ${c.first} ${c.last}: ${e.message||e}`);
+        continue;
+      }
+      // Create Won deal — only when contact is new (existing contacts keep their existing deal)
+      try {
+        let dealAmt = 0;
+        for (const r of c.rows) {
+          if (r.status === 'active' || r.status === 'pending') {
+            dealAmt += (Number(r.monthly_premium) || 0) * 12;
+          }
+        }
+        const { error: dErr } = await crmClient.from('deals').insert({
+          owner_id, contact_id: contactId,
+          pipeline_id: salesPipeline.id, stage_id: wonStage.id,
+          name: `${c.first} ${c.last}`,
+          amount: dealAmt || null,
+          quote_data: { source: '2026_sync', importedAt: new Date().toISOString() }
+        });
+        if (dErr) throw dErr;
+        dealsCreated++;
+      } catch (e) {
+        errors++;
+        errorList.push(`Deal ${c.first} ${c.last}: ${e.message||e}`);
+      }
+    }
+
+    // 3) Upsert policies by AppID — UPDATE existing in place (preserves manual edits),
+    //    INSERT new ones. NEVER delete.
+    for (const r of c.rows) {
+      const carrier = r.commission_product && r.commission_product.startsWith('usha_asc:') ? 'USHA - ASC'
+                    : r.commission_product && r.commission_product.startsWith('usha:')      ? 'USHEALTH'
+                    : 'Unknown';
+      const existing = existingByAppId.get(r.app_id);
+      try {
+        if (existing) {
+          // Build a minimal patch — only refresh fields that come from the export.
+          // Don't touch user-editable fields: notes (other than appending app_id if missing),
+          // coverage_level, commission_product if user has overridden it.
+          const patch = {
+            status: r.status,
+            monthly_premium: r.monthly_premium || existing.monthly_premium,
+            effective_date: r.effective_date || existing.effective_date,
+          };
+          // If user hasn't customized, refresh carrier + plan_name + commission_product too
+          if ((existing.notes || '').startsWith('App ID:')) {
+            patch.carrier = carrier;
+            patch.plan_name = r.product_label;
+            if (r.commission_product) patch.commission_product = r.commission_product;
+            patch.notes = `App ID: ${r.app_id}${r.submit_date ? ' · Submitted ' + r.submit_date : ''}`;
+          }
+          // Only update if any field actually changed to avoid spam writes
+          let changed = false;
+          for (const k of Object.keys(patch)) {
+            if ((existing[k] ?? null) !== (patch[k] ?? null)) { changed = true; break; }
+          }
+          if (changed) {
+            const { error: uErr } = await crmClient.from('policies').update(patch).eq('id', existing.id);
+            if (uErr) throw uErr;
+            policiesUpdated++;
+          } else {
+            policiesUntouched++;
+          }
+        } else {
+          // New row — insert
+          const { error: iErr } = await crmClient.from('policies').insert({
+            owner_id, contact_id: contactId,
+            carrier, plan_name: r.product_label,
+            status: r.status,
+            commission_product: r.commission_product,
+            coverage_level: 'Single',
+            monthly_premium: r.monthly_premium || null,
+            effective_date: r.effective_date || null,
+            renewal_date: r.effective_date ? r.effective_date.replace(/^(\d{4})/, y => String(parseInt(y)+1)) : null,
+            notes: `App ID: ${r.app_id}${r.submit_date ? ' · Submitted ' + r.submit_date : ''}`
+          });
+          if (iErr) throw iErr;
+          policiesInserted++;
+        }
+      } catch (e) {
+        errors++;
+        errorList.push(`Policy ${r.app_id} (${c.first} ${c.last}): ${e.message||e}`);
+      }
+    }
+  }
+
+  await loadCRMData();
+  const summary = `Synced: ${policiesInserted} new + ${policiesUpdated} updated + ${policiesUntouched} unchanged · ${contactsCreated} new contacts · ${dealsCreated} new deals · ${errors} errors`;
+  if (errors > 0) {
+    console.error('Bulk 2026 errors:', errorList);
+    showToast(summary + ' (see console)', 'error');
+  } else {
+    showToast(summary, 'success');
+  }
+  if (typeof renderCRMCommissions === 'function' && document.getElementById('crmWorkspaceBody')) {
+    renderCRMCommissions();
+  }
+}
+
+// Expose to global scope so a button can call it
+window.openBulk2026ImportModal = openBulk2026ImportModal;
+window.runBulk2026Import = runBulk2026Import;
+
+// =====================================================================
+// AUTO TAKEN-RATE — compute UW + SGI Taken Rate from policy data
+// =====================================================================
+function computeAutoTakenRates() {
+  const out = { uwTR: null, sgiTR: null, uwSubmitted: 0, uwIssued: 0, sgiSubmitted: 0, sgiIssued: 0, sgiFixed: false };
+  if (!Array.isArray(crmPolicies)) return out;
+  const today = new Date();
+  const _yr = (typeof getCRMYear === 'function') ? getCRMYear() : today.getFullYear();
+  const yStart = new Date(_yr, 0, 1);
+  const yEnd   = new Date(_yr, 11, 31);
+  const inWindow = (p) => {
+    const d = parseLocalDate(p.effective_date || p.submit_date || p.created_at);
+    if (!d) return false;
+    return d >= yStart && d <= yEnd;
+  };
+  for (const p of crmPolicies) {
+    const cat = ushaCategoryForPolicy(p);
+    if (cat !== 'underwritten' && cat !== 'sgi') continue;
+    if (!inWindow(p)) continue;
+    const isIssued  = p.status === 'active';
+    const isPending = p.status === 'pending';
+    // Submitted = issued + declined + withdrawn + not_taken (NOT pending — pending isn't decided yet)
+    const isDeclined = ['declined','not_taken','withdrawn'].includes(p.status);
+    if (cat === 'underwritten') {
+      if (isIssued)   { out.uwIssued++; out.uwSubmitted++; }
+      else if (isDeclined) out.uwSubmitted++;
+    } else {
+      if (isIssued)   { out.sgiIssued++; out.sgiSubmitted++; }
+      else if (isDeclined) out.sgiSubmitted++;
+    }
+  }
+  if (out.uwSubmitted >= 5)  out.uwTR  = (out.uwIssued / out.uwSubmitted) * 100;
+  if (out.sgiSubmitted >= 20) out.sgiTR = (out.sgiIssued / out.sgiSubmitted) * 100;
+  else if (out.sgiSubmitted > 0) { out.sgiTR = 65; out.sgiFixed = true; } // Fixed Taken Rate per USHA
+  return out;
+}
+
+// Patch getBonusTakenRates to merge auto-calc with manual entry.
+// Auto-calc takes precedence when there's enough data; manual is shown as override.
+const _origGetBonusTakenRates = getBonusTakenRates;
+getBonusTakenRates = function() {
+  const manual = _origGetBonusTakenRates();
+  const auto = computeAutoTakenRates();
+  return {
+    uwTR: auto.uwTR != null ? auto.uwTR : manual.uwTR,
+    sgiTR: auto.sgiTR != null ? auto.sgiTR : manual.sgiTR,
+    updatedAt: manual.updatedAt,
+    auto: auto,
+    manual: manual,
+    source: (auto.uwTR != null || auto.sgiTR != null) ? 'auto' : (manual.uwTR != null || manual.sgiTR != null ? 'manual' : 'none')
+  };
+};
+
+
+// =====================================================================
+// PAY DATA — actual USHA payouts loaded from EmanuelGreco_2026_PayData.xlsx
+// Source of truth for the YTD KPI cards (replaces rate-book estimates)
+// =====================================================================
+
+const PAY_DATA_2026 = {"paychecks":[{"pay_date":"01/08/2026","period_start":"12/31/2025","period_end":"01/08/2026","advances":4037.77,"misc_bonus":0.0,"misc_desc":"","total_payout":4037.77,"beg_reserve":23021.43,"end_reserve":20050.64,"chargebacks":-4989.44,"reinstatements":0.0},{"pay_date":"01/15/2026","period_start":"01/09/2026","period_end":"01/15/2026","advances":1783.68,"misc_bonus":7732.0,"misc_desc":"Dec 2025 Personal Production Bonus (EFT)","total_payout":9515.68,"beg_reserve":20050.64,"end_reserve":16874.31,"chargebacks":-4068.06,"reinstatements":0.0},{"pay_date":"01/22/2026","period_start":"01/16/2026","period_end":"01/22/2026","advances":757.11,"misc_bonus":0.0,"misc_desc":"","total_payout":757.11,"beg_reserve":16874.31,"end_reserve":16392.99,"chargebacks":-1003.15,"reinstatements":143.32},{"pay_date":"01/29/2026","period_start":"01/23/2026","period_end":"01/29/2026","advances":3539.59,"misc_bonus":0.0,"misc_desc":"","total_payout":3539.59,"beg_reserve":16392.99,"end_reserve":16839.58,"chargebacks":-2326.13,"reinstatements":1003.15},{"pay_date":"02/05/2026","period_start":"01/30/2026","period_end":"02/05/2026","advances":0.0,"misc_bonus":0.0,"misc_desc":"","total_payout":0.0,"beg_reserve":16839.58,"end_reserve":12790.89,"chargebacks":-4048.69,"reinstatements":0.0},{"pay_date":"02/12/2026","period_start":"02/06/2026","period_end":"02/12/2026","advances":1118.79,"misc_bonus":0.0,"misc_desc":"","total_payout":1118.79,"beg_reserve":12790.89,"end_reserve":13206.88,"chargebacks":-143.32,"reinstatements":0.0},{"pay_date":"02/19/2026","period_start":"02/13/2026","period_end":"02/19/2026","advances":1641.45,"misc_bonus":0.0,"misc_desc":"","total_payout":1641.45,"beg_reserve":13206.88,"end_reserve":12146.52,"chargebacks":-1880.96,"reinstatements":0.0},{"pay_date":"02/26/2026","period_start":"02/20/2026","period_end":"02/26/2026","advances":471.13,"misc_bonus":0.0,"misc_desc":"","total_payout":471.13,"beg_reserve":12146.52,"end_reserve":7818.94,"chargebacks":-4563.11,"reinstatements":0.0},{"pay_date":"03/05/2026","period_start":"02/27/2026","period_end":"03/05/2026","advances":415.36,"misc_bonus":0.0,"misc_desc":"","total_payout":415.36,"beg_reserve":7818.94,"end_reserve":5838.88,"chargebacks":-2187.7,"reinstatements":0.0},{"pay_date":"03/12/2026","period_start":"03/06/2026","period_end":"03/12/2026","advances":2735.6,"misc_bonus":0.0,"misc_desc":"","total_payout":2735.6,"beg_reserve":5838.88,"end_reserve":5612.86,"chargebacks":-1593.62,"reinstatements":0.0},{"pay_date":"03/19/2026","period_start":"03/13/2026","period_end":"03/19/2026","advances":1029.41,"misc_bonus":0.0,"misc_desc":"","total_payout":1029.41,"beg_reserve":5612.86,"end_reserve":4940.46,"chargebacks":-1187.04,"reinstatements":0.0},{"pay_date":"03/26/2026","period_start":"03/20/2026","period_end":"03/26/2026","advances":1790.27,"misc_bonus":0.0,"misc_desc":"","total_payout":1790.27,"beg_reserve":4940.46,"end_reserve":5303.97,"chargebacks":-306.84,"reinstatements":0.0},{"pay_date":"04/02/2026","period_start":"03/27/2026","period_end":"04/02/2026","advances":4624.08,"misc_bonus":0.0,"misc_desc":"","total_payout":4624.08,"beg_reserve":5303.97,"end_reserve":6044.31,"chargebacks":-1101.66,"reinstatements":0.0},{"pay_date":"04/09/2026","period_start":"04/03/2026","period_end":"04/09/2026","advances":2812.16,"misc_bonus":0.0,"misc_desc":"","total_payout":2812.16,"beg_reserve":6044.31,"end_reserve":7074.88,"chargebacks":0.0,"reinstatements":0.0},{"pay_date":"04/16/2026","period_start":"04/10/2026","period_end":"04/16/2026","advances":2719.94,"misc_bonus":0.0,"misc_desc":"","total_payout":2719.94,"beg_reserve":7074.88,"end_reserve":7781.56,"chargebacks":-236.42,"reinstatements":0.0},{"pay_date":"04/23/2026","period_start":"04/17/2026","period_end":"04/23/2026","advances":509.89,"misc_bonus":0.0,"misc_desc":"","total_payout":509.89,"beg_reserve":7781.56,"end_reserve":6986.31,"chargebacks":-1005.24,"reinstatements":0.0}],"account_ytd":{"Begin Balance":49245.4,"Earned Advance":-18996.55,"As Earned":-3040.57,"Advances":19320.16,"E&O":126.0,"Interest":579.18,"Appointment Fees":115.0,"Payout":2736.78,"End Balance":0.0},"earnings":{"As Earned - Total":{"monthly_first_year":849.89,"monthly_renewal":0.0,"monthly_total":849.89,"ytd_first_year":3040.57,"ytd_renewal":0.0,"ytd_total":3040.57},"Earned Advance - Total":{"monthly_first_year":6767.72,"monthly_renewal":0.0,"monthly_total":6767.72,"ytd_first_year":18996.55,"ytd_renewal":0.0,"ytd_total":18996.55},"Totals":{"monthly_first_year":7617.61,"monthly_renewal":0.0,"monthly_total":7617.61,"ytd_first_year":22037.12,"ytd_renewal":0.0,"ytd_total":22037.12}},"as_of":"2026-04-23"};
+
+function getActualYTD() {
+  if (typeof PAY_DATA_2026 === 'undefined' || !PAY_DATA_2026) return null;
+  const p = PAY_DATA_2026;
+  const sumPaychecks   = p.paychecks.reduce((a,r) => a + (r.total_payout || 0), 0);
+  const sumAdvances    = p.paychecks.reduce((a,r) => a + (r.advances || 0), 0);
+  const sumBonuses     = p.paychecks.reduce((a,r) => a + (r.misc_bonus || 0), 0);
+  const sumChargebacks = p.paychecks.reduce((a,r) => a + (r.chargebacks || 0), 0);
+  const sumReinstates  = p.paychecks.reduce((a,r) => a + (r.reinstatements || 0), 0);
+  const lastReserve    = p.paychecks.length ? p.paychecks[p.paychecks.length-1].end_reserve : 0;
+  // From YTD Earnings summary — actual COMMISSION earned (As Earned + Earned Advance)
+  const earnings = (p.earnings && p.earnings.Totals) ? p.earnings.Totals : null;
+  const commissionEarnedYTD = earnings ? earnings.ytd_total : (sumAdvances); // fallback: sum of advance lines
+  const monthlyEarning = earnings ? earnings.monthly_total : 0;
+  return {
+    asOf:               p.as_of,
+    paycheckCount:      p.paychecks.length,
+    cashBankedYTD:      sumPaychecks,    // total $ deposited to bank
+    advancesYTD:        sumAdvances,     // commission advances paid
+    bonusesYTD:         sumBonuses,      // production / association bonuses paid
+    chargebacksYTD:     sumChargebacks,  // negative number
+    reinstatementsYTD:  sumReinstates,
+    netChargebacks:     sumChargebacks + sumReinstates,
+    reserveBalance:     lastReserve,
+    commissionEarnedYTD: commissionEarnedYTD,  // actual $ earned (advance + as-earned)
+    asEarnedYTD:        (p.earnings && p.earnings['As Earned - Total']) ? p.earnings['As Earned - Total'].ytd_total : 0,
+    earnedAdvanceYTD:   (p.earnings && p.earnings['Earned Advance - Total']) ? p.earnings['Earned Advance - Total'].ytd_total : 0,
+    monthlyEarning:     monthlyEarning,
+  };
+}
+
+window.getActualYTD = getActualYTD;
+
+
+// =====================================================================
+// WEEKLY PAYCHECK UPLOADER — PDF parsing for USHA Advance Statements
+// User uploads agent.ushadvisors.com → Reports → Weekly Advance Statement
+// PDF every Friday. Parser extracts pay period, reserve summary, advances,
+// payouts, chargebacks. Saves to `paychecks` table (one row per period).
+// All Commission/YTD Sales views read from this when user is on 2026.
+// =====================================================================
+
+let crmPaychecks = [];
+
+async function loadCRMPaychecks() {
+  if (!crmClient || !crmUser) return;
+  try {
+    const { data, error } = await crmClient
+      .from('paychecks')
+      .select('*')
+      .eq('owner_id', crmUser.id)
+      .order('period_end', { ascending: false });
+    if (error) throw error;
+    crmPaychecks = data || [];
+  } catch (e) {
+    console.warn('Could not load paychecks:', e);
+    crmPaychecks = [];
+  }
+}
+window.loadCRMPaychecks = loadCRMPaychecks;
+
+// Money helpers
+function _parseMoney(s) {
+  if (s == null) return 0;
+  const m = String(s).replace(/,/g, '').match(/-?\$?(-?[\d.]+)/);
+  if (!m) return 0;
+  const v = parseFloat(m[1]);
+  if (isNaN(v)) return 0;
+  // Handle "-$X" formatting
+  if (String(s).trim().startsWith('-')) return -Math.abs(v);
+  return v;
+}
+
+function _toIsoDate(mdy) {
+  // "04/17/2026" → "2026-04-17"
+  if (!mdy) return null;
+  const m = String(mdy).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+}
+
+// Pull a labeled $-value from text. Looks for "Label" then captures the next $...
+function _grabMoneyAfter(text, label) {
+  // Build a regex that finds the label followed by optional whitespace and a $ amount
+  const re = new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*-?\\$?\\s*-?\\$?([\\d,]+\\.\\d{2})', 'i');
+  const m = text.match(re);
+  if (!m) return 0;
+  let v = parseFloat(m[1].replace(/,/g, ''));
+  // Detect leading negative anywhere in the matched chunk
+  const matchedChunk = m[0];
+  if (/-\$/.test(matchedChunk) || /-[\d]/.test(matchedChunk)) v = -Math.abs(v);
+  return v;
+}
+
+// Parse a USHA Weekly Advance Statement PDF into a paycheck row.
+async function parseUSHAAdvancePDF(file) {
+  if (typeof pdfjsLib === 'undefined') throw new Error('PDF library not loaded — refresh the page');
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const allText = [];
+  // Extract text by walking page items (preserving rough order)
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    allText.push(content.items.map(item => item.str).join(' '));
+  }
+  const text = allText.join(' \n ');
+
+  // Period
+  const periodM = text.match(/Period:\s*(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{2}\/\d{4})/);
+  if (!periodM) throw new Error('Could not find pay period in PDF — is this a USHA Weekly Advance Statement?');
+  const period_start = _toIsoDate(periodM[1]);
+  const period_end   = _toIsoDate(periodM[2]);
+
+  // Reserve Summary block
+  const beg_reserve     = _grabMoneyAfter(text, 'Beginning Balance');
+  const advance_reserve = _grabMoneyAfter(text, 'Plus Advance Reserve');
+  const reinstatements  = _grabMoneyAfter(text, 'Plus Reinstatements');
+  const reserve_adj     = _grabMoneyAfter(text, 'Reserve Adjustments');
+  // "Less Chargebacks" — value follows; PDF shows -$X format
+  let chargebacks = 0;
+  const cbM = text.match(/Less Chargebacks\s*[-]?\$?\s*-?\$?([\d,]+\.\d{2})/i);
+  if (cbM) chargebacks = -Math.abs(parseFloat(cbM[1].replace(/,/g, '')));
+  // Total Reserve = sub-total/end value
+  const end_reserve = _grabMoneyAfter(text, 'Total Reserve');
+
+  // Statement Summary block
+  const advances     = _grabMoneyAfter(text, 'Advances');
+  const reserve_short = _grabMoneyAfter(text, 'Reserve Short');
+  const total_payout = _grabMoneyAfter(text, 'Total Payout');
+
+  // Per-policy ADVANCE DETAIL — extract each line as a record
+  // Lines have shape: <agent> <product> <policyId> <customer> <appdate> <effdate> ... $premium <term> <rate%> $advanced $withheld $netadvance
+  const advance_detail = [];
+  const advanceSection = text.split(/ADVANCE DETAIL/i)[1];
+  if (advanceSection) {
+    const cutoff = advanceSection.search(/CHARGEBACK DETAIL/i);
+    const slice = cutoff > -1 ? advanceSection.slice(0, cutoff) : advanceSection;
+    // Split by Policy ID pattern (USHA app IDs like 02N..., 52Y..., 70S..., 72G..., 75G... etc.)
+    const lineRegex = /(\w[\w\d]+)\s+([A-Z][\w\d]+)\s+([A-Za-z][\w\s.,'-]+?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+\$([\d.,]+)\s+(\d+)%?\s+\$([\d,]+\.\d{2})\s+([\d.]+)\s+([\d.]+%?)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})/g;
+    // Simpler approach: scan for policy IDs and customer names
+    // Skip detailed parsing for now; store raw text fragment for later analysis
+  }
+
+  return {
+    period_start, period_end,
+    beg_reserve, advance_reserve, chargebacks, reinstatements, reserve_adj, end_reserve,
+    advances, reserve_short, total_payout,
+    misc_bonus: 0, misc_desc: '',
+    advance_detail: null,    // future enhancement
+    chargeback_detail: null, // future enhancement
+    source: 'pdf_upload',
+    raw_filename: file.name
+  };
+}
+
+// Open the upload modal on YTD Sales tab
+function openPaycheckUploadModal() {
+  if (!crmClient || !crmUser) {
+    showToast('Sign in to the CRM first.', 'error');
+    return;
+  }
+
+  // Reuse a generic modal pattern — we'll use showConfirm with a file input
+  const html = `
+    <div style="padding:6px 0">
+      <div style="font-size:13px;color:var(--white);margin-bottom:8px">Drop your <strong>Weekly Advance Statement PDF</strong> here</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">Get it from agent.ushadvisors.com → Reports → Weekly Advance Statement → Download PDF</div>
+
+      <input type="file" id="paycheckPdfInput" accept="application/pdf" style="display:none" onchange="handlePaycheckPdfPick(event)">
+      <div id="paycheckDropZone" onclick="document.getElementById('paycheckPdfInput').click()"
+           ondragover="event.preventDefault();this.style.background='rgba(74,222,128,0.08)'"
+           ondragleave="this.style.background='rgba(255,255,255,0.02)'"
+           ondrop="event.preventDefault();this.style.background='rgba(255,255,255,0.02)';handlePaycheckPdfDrop(event)"
+           style="padding:30px;border:2px dashed var(--border);border-radius:10px;background:rgba(255,255,255,0.02);text-align:center;cursor:pointer;transition:background 0.15s">
+        <div style="font-size:14px;color:var(--white);margin-bottom:4px">📄 Click to choose a PDF, or drag &amp; drop</div>
+        <div style="font-size:11px;color:var(--muted)">Single weekly statement file (.pdf)</div>
+      </div>
+      <div id="paycheckUploadPreview" style="display:none;margin-top:14px"></div>
+      <div id="paycheckUploadError" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
+    </div>`;
+
+  showConfirm({
+    title: 'Upload Weekly Paycheck',
+    sub: 'USHA Advance Statement → updates Commission tab actuals',
+    body: html,
+    okText: 'Upload',
+    cancelText: 'Cancel',
+    danger: false
+  }).then(ok => {
+    if (ok && window._pendingPaycheck) {
+      savePaycheckToSupabase(window._pendingPaycheck);
+    }
+    window._pendingPaycheck = null;
+  });
+}
+window.openPaycheckUploadModal = openPaycheckUploadModal;
+
+async function handlePaycheckPdfPick(event) {
+  const file = event.target.files && event.target.files[0];
+  if (file) await processPaycheckPdf(file);
+}
+window.handlePaycheckPdfPick = handlePaycheckPdfPick;
+
+async function handlePaycheckPdfDrop(event) {
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (file) await processPaycheckPdf(file);
+}
+window.handlePaycheckPdfDrop = handlePaycheckPdfDrop;
+
+async function processPaycheckPdf(file) {
+  const errEl = document.getElementById('paycheckUploadError');
+  const prevEl = document.getElementById('paycheckUploadPreview');
+  if (errEl) errEl.style.display = 'none';
+  if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
+    if (errEl) { errEl.textContent = 'Please pick a .pdf file.'; errEl.style.display = 'block'; }
+    return;
+  }
+  try {
+    const parsed = await parseUSHAAdvancePDF(file);
+    window._pendingPaycheck = parsed;
+    const fmt = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (prevEl) {
+      prevEl.innerHTML = `
+        <div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:8px;padding:12px 14px">
+          <div style="font-size:12px;color:var(--success);font-weight:600;margin-bottom:8px">✓ Parsed successfully — review before saving</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+            <div><span style="color:var(--muted)">Period:</span> ${parsed.period_start} → ${parsed.period_end}</div>
+            <div><span style="color:var(--muted)">Total Payout:</span> <strong style="color:var(--success)">${fmt(parsed.total_payout)}</strong></div>
+            <div><span style="color:var(--muted)">Advances:</span> ${fmt(parsed.advances)}</div>
+            <div><span style="color:var(--muted)">Chargebacks:</span> <span style="color:${parsed.chargebacks < 0 ? 'var(--error)' : 'inherit'}">${fmt(parsed.chargebacks)}</span></div>
+            <div><span style="color:var(--muted)">Reinstatements:</span> ${fmt(parsed.reinstatements)}</div>
+            <div><span style="color:var(--muted)">End Reserve:</span> <strong>${fmt(parsed.end_reserve)}</strong></div>
+          </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:8px">Click <strong>Upload</strong> below to save. If a paycheck already exists for this period, it'll be updated.</div>
+        </div>`;
+      prevEl.style.display = 'block';
+    }
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = e.message || 'Could not parse PDF.';
+      errEl.style.display = 'block';
+    }
+  }
+}
+window.processPaycheckPdf = processPaycheckPdf;
+
+async function savePaycheckToSupabase(parsed) {
+  try {
+    const row = { ...parsed, owner_id: crmUser.id };
+    // Upsert by (owner_id, period_start, period_end)
+    const { error } = await crmClient
+      .from('paychecks')
+      .upsert(row, { onConflict: 'owner_id,period_start,period_end' });
+    if (error) throw error;
+    await loadCRMPaychecks();
+    showToast(`Paycheck saved (${parsed.period_start} → ${parsed.period_end})`, 'success');
+    // Auto-create next Friday's reminder task
+    await ensureWeeklyPaycheckTask();
+    // Refresh views
+    if (crmActiveTab === 'commissions') renderCRMCommissions();
+    else if (crmActiveTab === 'ytdsales') renderCRMYTDSales();
+  } catch (e) {
+    showToast('Save failed: ' + (e.message || e), 'error');
+  }
+}
+window.savePaycheckToSupabase = savePaycheckToSupabase;
+
+// Auto-create a recurring weekly task: "Upload weekly paycheck PDF" due next Friday at 10:00 AM.
+// Only creates one if there isn't already an open one for an upcoming Friday.
+async function ensureWeeklyPaycheckTask() {
+  if (!crmClient || !crmUser) return;
+  // Find next Friday
+  const today = new Date(); today.setHours(0,0,0,0);
+  const day = today.getDay(); // 0 Sun … 5 Fri … 6 Sat
+  const daysUntilFri = (5 - day + 7) % 7 || 7; // always at least 1 day out
+  const nextFri = new Date(today); nextFri.setDate(today.getDate() + daysUntilFri);
+  const dueIso = nextFri.toISOString().slice(0,10);
+  // Check for existing open task for this date
+  const { data: existing } = await crmClient
+    .from('tasks')
+    .select('id')
+    .eq('owner_id', crmUser.id)
+    .eq('due_date', dueIso)
+    .eq('completed', false)
+    .ilike('title', 'Upload weekly paycheck%')
+    .limit(1);
+  if (existing && existing.length > 0) return;
+  await crmClient.from('tasks').insert({
+    owner_id: crmUser.id,
+    title: 'Upload weekly paycheck PDF',
+    notes: 'Pull the Weekly Advance Statement from agent.ushadvisors.com → Reports → Weekly Advance Statement → Download PDF, then drop it on YTD Sales → Upload Paycheck.',
+    due_date: dueIso,
+    due_time: '10:00',
+    priority: 'normal',
+    completed: false
+  });
+}
+window.ensureWeeklyPaycheckTask = ensureWeeklyPaycheckTask;
+
+// =====================================================================
+// REPLACE getActualYTD — read from Supabase paychecks table
+// (overrides the inline-constant version when paychecks are loaded)
+// =====================================================================
+const _origGetActualYTD = (typeof getActualYTD === 'function') ? getActualYTD : null;
+getActualYTD = function() {
+  // Prefer Supabase data if any paychecks have been uploaded
+  if (Array.isArray(crmPaychecks) && crmPaychecks.length > 0) {
+    const yr = (typeof getCRMYear === 'function') ? getCRMYear() : new Date().getFullYear();
+    const yearChecks = crmPaychecks.filter(p => {
+      const d = (p.period_end || '').slice(0,4);
+      return parseInt(d) === yr;
+    }).sort((a,b) => (a.period_end || '').localeCompare(b.period_end || ''));
+    if (!yearChecks.length) return null;
+    const sum = (k) => yearChecks.reduce((a,r) => a + (Number(r[k]) || 0), 0);
+    const last = yearChecks[yearChecks.length - 1];
+    const first = yearChecks[0];
+    // Commission earned ≈ advances received YTD (less chargebacks if you want net,
+    // but USHA YTD Earnings is "Earned Advance + As Earned" both from advance-side).
+    // Simpler model: ytdCommissionEarned = sum of advances + bonuses
+    const advancesYTD = sum('advances');
+    const bonusesYTD  = sum('misc_bonus');
+    const cashBanked  = sum('total_payout');
+    const chargebacks = sum('chargebacks');
+    const reinstates  = sum('reinstatements');
+    return {
+      asOf:               last.period_end,
+      paycheckCount:      yearChecks.length,
+      cashBankedYTD:      cashBanked,
+      advancesYTD:        advancesYTD,
+      bonusesYTD:         bonusesYTD,
+      chargebacksYTD:     chargebacks,
+      reinstatementsYTD:  reinstates,
+      netChargebacks:     chargebacks + reinstates,
+      reserveBalance:     last.end_reserve || 0,
+      // Treat advances + bonuses as "earned this year" for the headline KPI
+      commissionEarnedYTD: advancesYTD + bonusesYTD,
+      asEarnedYTD:        0,  // not in advance-statement PDFs; show 0
+      earnedAdvanceYTD:   advancesYTD,
+      monthlyEarning:     yearChecks.length ? (advancesYTD / yearChecks.length) : 0,
+      source:             'supabase'
+    };
+  }
+  // Fallback: inline constant (initial seed)
+  return _origGetActualYTD ? _origGetActualYTD() : null;
+};
+window.getActualYTD = getActualYTD;
+
+
+// =====================================================================
+// SALES EXPORT UPLOADER — xlsx parsing for USHA Sales Reports
+// Same shape as the inline bulk import, but accepts an uploaded xlsx
+// instead of using the embedded data. Lets Emanuel re-export every
+// Friday and keep Issued AV YTD in sync with the portal.
+//
+// CRITICAL FIX in this version: ASC products (AIBCDIAMOND, etc.) have
+// Premium=$0, Assoc=$X. Old calc missed all ASC AV. New calc uses
+// max(Premium, Total) so association membership counts toward AV.
+// =====================================================================
+
+// Mirror the inline product map (keep in sync with the embedded data block)
+const SALES_PRODUCT_MAP = {
+  'PREMIERADVANTAGE-24':       ['usha:premier_advantage_24',  'underwritten'],
+  'PREMIERCHOICE-15':          ['usha:premier_choice_saw',     'underwritten'],
+  'PREMCH HEALTH WELL':        ['usha:premch_health_wellness', 'underwritten'],
+  'HEALTHACCESS III':          ['usha:healthaccess',           'sgi'],
+  'SECURE ADV SICKNESS':       ['usha:secureadv_sickness',     'sgi'],
+  'SECURE ADV ACCIDENT':       ['usha:secureadv_accident',     'sgi'],
+  'SECADV HLTH PLUS':          ['usha:secadv_hlth_plus',       'sgi'],
+  'SECADV HLTH WELL PLS':      ['usha:secadv_hlth_well_pls',   'sgi'],
+  'CRITICAL ILLNESS':          ['usha:critical_illness',       'supplemental'],
+  'CRITICAL ILLNESS FAM':      ['usha:critical_illness_fam',   'supplemental'],
+  'ACCIDENT BENEFIT SIN':      ['usha:accident_benefit_sin',   'supplemental'],
+  'ACCIDENT BENEFIT FAM':      ['usha:accident_benefit_fam',   'supplemental'],
+  'ACCIDENT BENEFIT COU':      ['usha:accident_benefit_cou',   'supplemental'],
+  'PREMIERVISION':             ['usha:premier_vision',         'supplemental'],
+  'SECUREDENTAL HIGH':         ['usha:securedental_high',      'supplemental'],
+  'SECUREDENTAL MEDIUM':       ['usha:securedental_med',       'supplemental'],
+  'SECUREDENTALPLUS HIG':      ['usha:securedentalplus_high',  'supplemental'],
+  'SECUREDENTALPLUS MED':      ['usha:securedentalplus_med',   'supplemental'],
+  'SECUREDENTALPLUS LOW':      ['usha:securedentalplus_low',   'supplemental'],
+  'HA-SECDENTPLUS MED':        ['usha:ha_secdentplus_med',     'supplemental'],
+  'AIBCDIAMOND 2015':          ['usha_asc:tier_5_diamond',     'asc'],
+  'AIBCRUBY 2015':             ['usha_asc:tier_2_ruby',        'asc'],
+  'AIBCSAPPHIRE 2015':         ['usha_asc:tier_4_sapphire',    'asc'],
+  'AIBCEXECDIAMOND 2015':      ['usha_asc:tier_6_exec_diamond','asc'],
+  'AIBCEMERALD 2015':          ['usha_asc:tier_3_emerald',     'asc'],
+  'SCADIAMOND 2015':           ['usha_asc:sca_tier_5_diamond', 'asc'],
+  'SCARUBY 2015':              ['usha_asc:sca_tier_2_ruby',    'asc'],
+  'SCAEMERALD 2015':           ['usha_asc:sca_tier_3_emerald', 'asc'],
+  'SCAEXECDIAMOND 2015':       ['usha_asc:sca_tier_6_exec',    'asc'],
+  'AIBC PRO':                  ['usha_asc:aibc_pro_aca',       'asc'],
+  'ABCENTREPRENEUR2020':       ['usha_asc:abcentrepreneur',    'asc'],
+  'ABCEXECUTIVE2020':          ['usha_asc:abcexecutive',       'asc'],
+};
+
+const SALES_STATUS_MAP = {
+  'In Force': 'active', 'Pending': 'pending',
+  'Declined': 'declined', 'Not Taken': 'not_taken', 'Withdrawn': 'withdrawn',
+  'Canceled': 'cancelled', 'Lapse': 'lapsed',
+};
+
+function _xlsxMoney(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  const m = String(v).replace(/,/g, '').match(/-?\$?\s*-?\$?([\d.]+)/);
+  if (!m) return 0;
+  let n = parseFloat(m[1]);
+  if (isNaN(n)) return 0;
+  if (String(v).trim().startsWith('-')) n = -Math.abs(n);
+  return n;
+}
+
+function _xlsxDateToIso(v) {
+  if (!v) return null;
+  // Excel may return Date object or "MM/DD/YYYY" string
+  if (v instanceof Date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${v.getFullYear()}-${pad(v.getMonth()+1)}-${pad(v.getDate())}`;
+  }
+  const s = String(v);
+  const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  return s.length >= 10 ? s.slice(0,10) : null;
+}
+
+function _splitNameLF(n) {
+  if (!n) return ['', ''];
+  if (typeof n !== 'string') n = String(n);
+  if (n.indexOf(',') > -1) {
+    const parts = n.split(',', 2);
+    return [parts[1].trim().replace(/\b\w/g, c => c.toUpperCase()), parts[0].trim().replace(/\b\w/g, c => c.toUpperCase())];
+  }
+  const parts = n.split(/\s+/);
+  return [parts[0] || '', parts.slice(1).join(' ')];
+}
+
+// Parse the Sales 2026 sheet into rows we can pass to runBulk2026Import-style logic
+async function parseSalesExportXLSX(file) {
+  if (typeof XLSX === 'undefined') throw new Error('SheetJS not loaded — refresh the page');
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data, { type: 'array', cellDates: true });
+  // Find the Sales sheet — try common names
+  const sheetName = wb.SheetNames.find(n => /sales/i.test(n)) || wb.SheetNames[0];
+  if (!sheetName) throw new Error('No sheet found in xlsx');
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+  if (!rows.length) throw new Error('Empty sheet');
+  const header = rows[0].map(h => String(h || '').trim().toLowerCase());
+  const idx = (name) => header.findIndex(h => h === name.toLowerCase());
+
+  const colAppId    = idx('AppID');
+  const colName     = idx('Name');
+  const colProduct  = idx('Product');
+  const colStatus   = idx('Status');
+  const colSubmit   = idx('Submit Date');
+  const colEff      = idx('Effective Date');
+  const colPremium  = idx('Premium');
+  const colAssoc    = idx('Assoc');
+  const colTotal    = idx('Total');
+
+  const required = { AppID: colAppId, Name: colName, Product: colProduct, Status: colStatus, Premium: colPremium };
+  const missing = Object.entries(required).filter(([k,v]) => v < 0).map(([k]) => k);
+  if (missing.length) throw new Error('Missing columns in xlsx: ' + missing.join(', '));
+
+  const out = [];
+  const unmapped = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const product = String(r[colProduct] || '').trim();
+    const name = r[colName];
+    if (!product || !name) continue;
+    const pmap = SALES_PRODUCT_MAP[product.toUpperCase()];
+    if (!pmap) { unmapped.push(product); continue; }
+    const [productId, category] = pmap;
+
+    // ------------ AV FIX: use Total for ASC, Premium for everything else ------------
+    // ASC products show Premium=$0 but Assoc=$X. USHA portal counts Assoc toward AV.
+    // For non-ASC, Premium is the annual customer premium = AV.
+    const premium = _xlsxMoney(r[colPremium]);
+    const assoc   = colAssoc >= 0 ? _xlsxMoney(r[colAssoc]) : 0;
+    const total   = colTotal >= 0 ? _xlsxMoney(r[colTotal]) : (premium + assoc);
+    const annualForAV = (category === 'asc') ? Math.max(total, premium + assoc) : premium;
+    const monthly = annualForAV ? +(annualForAV / 12).toFixed(2) : 0;
+
+    const [fn, ln] = _splitNameLF(name);
+    out.push({
+      app_id: r[colAppId],
+      first_name: fn,
+      last_name: ln,
+      product_label: product,
+      commission_product: productId,
+      category,
+      status: SALES_STATUS_MAP[r[colStatus]] || 'unknown',
+      effective_date: _xlsxDateToIso(r[colEff]),
+      submit_date:    _xlsxDateToIso(r[colSubmit]),
+      monthly_premium: monthly
+    });
+  }
+  return { rows: out, unmapped: [...new Set(unmapped)], sheetName };
+}
+
+// Open the Sales upload modal — preview + run import
+function openSalesUploadModal() {
+  if (!crmClient || !crmUser) { showToast('Sign in first.', 'error'); return; }
+  const html = `
+    <div style="padding:6px 0">
+      <div style="font-size:13px;color:var(--white);margin-bottom:8px">Drop your <strong>Sales Export xlsx</strong> here</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">Get it from agent.ushadvisors.com → Reports → Sales Production → Export to Excel. Re-uploading wipes the year's policies and reloads them so Issued AV stays in sync with your portal.</div>
+      <input type="file" id="salesXlsxInput" accept=".xlsx" style="display:none" onchange="handleSalesXlsxPick(event)">
+      <div onclick="document.getElementById('salesXlsxInput').click()"
+           ondragover="event.preventDefault();this.style.background='rgba(74,222,128,0.08)'"
+           ondragleave="this.style.background='rgba(255,255,255,0.02)'"
+           ondrop="event.preventDefault();this.style.background='rgba(255,255,255,0.02)';handleSalesXlsxDrop(event)"
+           style="padding:30px;border:2px dashed var(--border);border-radius:10px;background:rgba(255,255,255,0.02);text-align:center;cursor:pointer">
+        <div style="font-size:14px;color:var(--white);margin-bottom:4px">📊 Click to choose .xlsx, or drag &amp; drop</div>
+        <div style="font-size:11px;color:var(--muted)">Single export file</div>
+      </div>
+      <div id="salesXlsxPreview" style="display:none;margin-top:14px"></div>
+      <div id="salesXlsxError" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
+    </div>`;
+  showConfirm({
+    title: 'Upload Sales Export',
+    sub: 'Safe upsert — nothing gets deleted, manual edits preserved',
+    body: html,
+    okText: 'Sync Year Policies',
+    cancelText: 'Cancel',
+    danger: false
+  }).then(ok => {
+    if (ok && window._pendingSalesRows) {
+      runBulk2026Import(window._pendingSalesRows);
+    }
+    window._pendingSalesRows = null;
+  });
+}
+window.openSalesUploadModal = openSalesUploadModal;
+
+async function handleSalesXlsxPick(e) {
+  const f = e.target.files && e.target.files[0]; if (f) await processSalesXlsx(f);
+}
+window.handleSalesXlsxPick = handleSalesXlsxPick;
+async function handleSalesXlsxDrop(e) {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) await processSalesXlsx(f);
+}
+window.handleSalesXlsxDrop = handleSalesXlsxDrop;
+
+async function processSalesXlsx(file) {
+  const errEl = document.getElementById('salesXlsxError');
+  const prevEl = document.getElementById('salesXlsxPreview');
+  if (errEl) errEl.style.display = 'none';
+  try {
+    const { rows, unmapped, sheetName } = await parseSalesExportXLSX(file);
+    window._pendingSalesRows = rows;
+    const fmt = n => `$${(Number(n)||0).toLocaleString(undefined, {maximumFractionDigits:0})}`;
+    // AV by category
+    const cat = { underwritten: 0, sgi: 0, supplemental: 0, asc: 0, other: 0 };
+    const cnt = { underwritten: 0, sgi: 0, supplemental: 0, asc: 0, other: 0 };
+    for (const r of rows) {
+      if (r.status !== 'active' && r.status !== 'pending') continue;
+      const c = r.category || 'other';
+      cat[c] = (cat[c] || 0) + (Number(r.monthly_premium) || 0) * 12;
+      cnt[c] = (cnt[c] || 0) + 1;
+    }
+    const totalAV = Object.values(cat).reduce((a,v) => a+v, 0);
+    const issued = rows.filter(r => r.status === 'active').length;
+    const pending = rows.filter(r => r.status === 'pending').length;
+    if (prevEl) {
+      prevEl.innerHTML = `
+        <div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:8px;padding:12px 14px">
+          <div style="font-size:12px;color:var(--success);font-weight:600;margin-bottom:8px">✓ Parsed ${rows.length} rows from "${sheetName}"</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
+            <div><span style="color:var(--muted)">Issued:</span> <strong style="color:var(--success)">${issued}</strong></div>
+            <div><span style="color:var(--muted)">Pending:</span> <strong style="color:var(--yellow)">${pending}</strong></div>
+            <div><span style="color:var(--muted)">Total Issued AV:</span> <strong style="color:var(--success)">${fmt(totalAV)}</strong></div>
+            <div><span style="color:var(--muted)">UW:</span> ${fmt(cat.underwritten)} (${cnt.underwritten})</div>
+            <div><span style="color:var(--muted)">SGI:</span> ${fmt(cat.sgi)} (${cnt.sgi})</div>
+            <div><span style="color:var(--muted)">Supplemental:</span> ${fmt(cat.supplemental)} (${cnt.supplemental})</div>
+            <div><span style="color:var(--muted)">ASC:</span> ${fmt(cat.asc)} (${cnt.asc}) <span style="font-size:10px;color:var(--muted)">includes Assoc fees</span></div>
+          </div>
+          ${unmapped.length ? `<div style="font-size:11px;color:var(--yellow);margin-top:6px">⚠ ${unmapped.length} unknown product${unmapped.length === 1 ? '' : 's'}: ${unmapped.slice(0,5).map(escapeHTML).join(', ')}${unmapped.length > 5 ? '...' : ''}</div>` : ''}
+          <div style="font-size:10.5px;color:var(--muted);margin-top:8px">Click <strong>Sync Year Policies</strong> to update the CRM with this data. Existing policies are matched by USHA AppID and updated in place — manual edits are preserved.</div>
+        </div>`;
+      prevEl.style.display = 'block';
+    }
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Could not parse xlsx.'; errEl.style.display = 'block'; }
+  }
+}
+window.processSalesXlsx = processSalesXlsx;
+
+// Update the weekly task to also remind to upload sales export
+const _origEnsureWeeklyPaycheckTask = (typeof ensureWeeklyPaycheckTask === 'function') ? ensureWeeklyPaycheckTask : null;
+ensureWeeklyPaycheckTask = async function() {
+  if (!crmClient || !crmUser) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const day = today.getDay();
+  const daysUntilFri = (5 - day + 7) % 7 || 7;
+  const nextFri = new Date(today); nextFri.setDate(today.getDate() + daysUntilFri);
+  const dueIso = nextFri.toISOString().slice(0,10);
+  const { data: existing } = await crmClient
+    .from('tasks').select('id')
+    .eq('owner_id', crmUser.id).eq('due_date', dueIso).eq('completed', false)
+    .ilike('title', 'Upload weekly%').limit(1);
+  if (existing && existing.length > 0) return;
+  await crmClient.from('tasks').insert({
+    owner_id: crmUser.id,
+    title: 'Upload weekly USHA exports',
+    notes: 'Pull TWO files from agent.ushadvisors.com:\n• Reports → Weekly Advance Statement → Download PDF (paycheck data)\n• Reports → Sales Production → Export to Excel (Issued AV refresh)\n\nThen drop both on the YTD Sales tab.',
+    due_date: dueIso,
+    due_time: '10:00',
+    priority: 'normal',
+    completed: false
+  });
+};
+window.ensureWeeklyPaycheckTask = ensureWeeklyPaycheckTask;
+
 </script>
 </body>
 </html>
