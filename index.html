@@ -666,7 +666,120 @@
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     animation: slideUp 0.25s ease-out;
   }
-  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(20px) scale(0.97); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+  /* ============================================================
+     UTILITY CLASSES — replace common inline-style patterns
+     ============================================================ */
+  .label-mini { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .label-cell { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+  .label-tiny { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .text-muted { color: var(--muted); }
+  .text-mini  { font-size: 11px; }
+  .num-display { font-family: 'Playfair Display', serif; font-size: 26px; line-height: 1.1; }
+  .num-mid     { font-family: 'Playfair Display', serif; font-size: 22px; line-height: 1.1; }
+
+  /* Clickable rows — smooth hover lift */
+  .row-clickable { cursor: pointer; transition: background 0.15s ease, transform 0.15s ease; }
+  .row-clickable:hover { background: rgba(253, 199, 47, 0.04); }
+
+  /* Smooth tab/button transitions */
+  .settings-gear, .btn-ghost, .btn-primary { transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease; }
+  .btn-primary:active, .btn-ghost:active { transform: translateY(1px); }
+  .btn-primary:hover:not(:disabled) { box-shadow: 0 4px 14px rgba(253, 199, 47, 0.25); }
+
+  /* Cards lift slightly on hover when clickable */
+  .card-clickable { cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+  .card-clickable:hover { transform: translateY(-2px); border-color: rgba(253, 199, 47, 0.3); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+
+  /* ============================================================
+     SKELETON LOADER — replaces "Loading…" text
+     ============================================================ */
+  @keyframes skeletonShimmer {
+    0% { background-position: -200px 0; }
+    100% { background-position: calc(200px + 100%) 0; }
+  }
+  .skeleton {
+    display: inline-block;
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.08) 40px, rgba(255,255,255,0.04) 80px);
+    background-size: 200px 100%;
+    background-repeat: no-repeat;
+    border-radius: 6px;
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+    line-height: 1;
+  }
+  .skeleton-line { height: 14px; margin-bottom: 8px; border-radius: 4px; }
+  .skeleton-line.w-full { width: 100%; }
+  .skeleton-line.w-3-4  { width: 75%; }
+  .skeleton-line.w-1-2  { width: 50%; }
+  .skeleton-line.w-1-4  { width: 25%; }
+  .skeleton-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 14px;
+  }
+  .skeleton-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+
+  /* ============================================================
+     EMPTY STATE — friendlier than plain text
+     ============================================================ */
+  .empty-state {
+    padding: 56px 24px;
+    text-align: center;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.015);
+  }
+  .empty-state-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+    opacity: 0.6;
+  }
+  .empty-state-title {
+    font-size: 14px;
+    color: var(--white);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .empty-state-msg {
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 340px;
+    margin: 0 auto 14px;
+    line-height: 1.5;
+  }
+
+  /* ============================================================
+     MOBILE — stickier tab strip, drawer-style modals on phones
+     ============================================================ */
+  @media (max-width: 640px) {
+    /* CRM tab strip becomes horizontally scrollable */
+    .crm-tab-strip {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap !important;
+      white-space: nowrap;
+    }
+    .crm-tab-strip::-webkit-scrollbar { display: none; }
+    .crm-tab-strip .settings-gear { flex-shrink: 0; }
+
+    /* Modals slide up from bottom on phones */
+    .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+    .modal {
+      max-height: 92vh !important;
+      border-radius: 18px 18px 0 0 !important;
+      width: 100%;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); opacity: 1; } to { transform: translateY(0); opacity: 1; } }
+
+    /* Bigger tap targets */
+    .settings-gear, .btn-ghost, .btn-primary { min-height: 40px; }
+  }
+
   .modal-header {
     padding: 22px 26px;
     border-bottom: 1px solid var(--border);
@@ -1677,7 +1790,7 @@
       </div>
       <button class="modal-close" onclick="closeCRM()">×</button>
     </div>
-    <div class="saved-leads-head-row" style="flex-wrap:wrap;gap:8px">
+    <div class="saved-leads-head-row crm-tab-strip" style="flex-wrap:wrap;gap:8px">
       <button class="settings-gear" id="crmTabDashboard" onclick="showCRMTab('dashboard')" style="background:var(--yellow);color:var(--navy);font-weight:600">Dashboard</button>
       <button class="settings-gear" id="crmTabPipelines" onclick="showCRMTab('pipelines')">Tracker</button>
       <button class="settings-gear" id="crmTabTasks" onclick="showCRMTab('tasks')">Tasks <span id="crmTaskBadge" style="display:none;background:var(--error);color:#fff;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
@@ -1686,9 +1799,10 @@
       <button class="settings-gear" id="crmTabYTDSales" onclick="showCRMTab('ytdsales')">YTD Sales</button>
       <button class="settings-gear" id="crmTabReports" onclick="showCRMTab('reports')">Reports</button>
       <div style="position:relative;flex:1;min-width:200px;max-width:340px;margin:0 4px">
-        <input id="crmSearchBar" type="text" placeholder="Search name, email, phone, city, notes…" autocomplete="off"
+        <input id="crmSearchBar" type="text" placeholder="Search…  ⌘K" autocomplete="off"
                oninput="crmHandleSearch(this.value)" onfocus="crmHandleSearch(this.value)"
-               style="width:100%;padding:7px 10px;font-size:12.5px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px" />
+               style="width:100%;padding:7px 30px 7px 10px;font-size:12.5px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:6px" />
+        <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--muted);background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;padding:1px 5px;pointer-events:none;font-family:monospace">⌘K</span>
         <div id="crmSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#141927;border:1px solid var(--border);border-radius:8px;max-height:320px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,0.5)"></div>
       </div>
       <button class="settings-gear" onclick="openCRMImport()" title="Bulk-import leads or clients from a CSV">
@@ -5574,7 +5688,17 @@ function showCRMTab(tab) {
     el.style.fontWeight = tab === t ? '600' : '';
   });
   const body = document.getElementById('crmWorkspaceBody');
-  body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Loading…</div>';
+  // Skeleton loader — shimmer placeholders matching common tab layouts
+  body.innerHTML = `
+    <div style="padding:20px">
+      <div class="skeleton-grid" style="margin-bottom:14px">
+        <div class="skeleton-card"><div class="skeleton skeleton-line w-1-2"></div><div class="skeleton skeleton-line w-3-4" style="height:24px;margin-top:8px"></div><div class="skeleton skeleton-line w-1-4" style="margin-top:6px"></div></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-line w-1-2"></div><div class="skeleton skeleton-line w-3-4" style="height:24px;margin-top:8px"></div><div class="skeleton skeleton-line w-1-4" style="margin-top:6px"></div></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-line w-1-2"></div><div class="skeleton skeleton-line w-3-4" style="height:24px;margin-top:8px"></div><div class="skeleton skeleton-line w-1-4" style="margin-top:6px"></div></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-line w-1-2"></div><div class="skeleton skeleton-line w-3-4" style="height:24px;margin-top:8px"></div><div class="skeleton skeleton-line w-1-4" style="margin-top:6px"></div></div>
+      </div>
+      <div class="skeleton-card"><div class="skeleton skeleton-line w-1-4" style="height:18px;margin-bottom:14px"></div><div class="skeleton skeleton-line w-full"></div><div class="skeleton skeleton-line w-3-4"></div><div class="skeleton skeleton-line w-full"></div><div class="skeleton skeleton-line w-1-2"></div></div>
+    </div>`;
   loadCRMData().then(() => {
     if (tab === 'dashboard') renderCRMDashboard();
     else if (tab === 'tasks') renderCRMTasks();
@@ -9191,14 +9315,15 @@ function renderCRMCommissions() {
       ${_crmYr !== 2026 ? `<div style="font-size:11px;color:var(--yellow);background:rgba(253,199,47,0.06);border:1px solid rgba(253,199,47,0.2);border-radius:6px;padding:6px 12px">No pay data or sales import for ${_crmYr} yet — actuals will be empty until you upload a ${_crmYr} export.</div>` : ''}
     </div>`;
 
-  // Show import banner if 2026 data is embedded and there are <50 active policies (proxy for "haven't imported yet")
-  const importBanner = (typeof BULK_IMPORT_2026_ROWS !== 'undefined' && BULK_IMPORT_2026_ROWS.length > 0) ? `
-    <div style="background:linear-gradient(135deg, rgba(74,222,128,0.08), rgba(253,199,47,0.06));border:1px solid rgba(74,222,128,0.25);border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+  // Show a small hint banner only when there are very few policies on file
+  // (proxy for "user hasn't done their first sales import yet")
+  const showHint = (active.length < 20);
+  const importBanner = showHint ? `
+    <div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)">
       <div>
-        <div style="font-size:13px;color:var(--white);font-weight:600">2026 Sales Bulk Import Available</div>
-        <div style="font-size:11.5px;color:var(--muted);margin-top:2px">${BULK_IMPORT_2026_ROWS.length} rows × 70 clients from your 2026 sales export. One-shot import: wipes 2026 policies, creates contacts &amp; Won deals, populates the tracker.</div>
+        <strong style="color:var(--success)">Tip:</strong> upload your latest USHA Sales Report on the <strong style="color:var(--white)">YTD Sales</strong> tab to populate the tracker. Manual edits are preserved on every re-upload.
       </div>
-      <button class="btn-primary" style="width:auto;padding:9px 16px;margin-top:0;flex-shrink:0" onclick="openBulk2026ImportModal()">📥 Review &amp; Import</button>
+      <button class="btn-ghost" style="width:auto;padding:6px 14px;margin-top:0;font-size:12px;flex-shrink:0" onclick="showCRMTab('ytdsales')">Go to YTD Sales →</button>
     </div>` : '';
 
   body.innerHTML = `
@@ -9217,6 +9342,11 @@ function renderCRMCommissions() {
             <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Reserve Balance</div>
             <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(actual.reserveBalance)}</div>
             <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Unearned advance · pays out as policies earn</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Advances YTD</div>
+            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(actual.advancesYTD)}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">9-month upfront commission · ${actual.paycheckCount} weekly statements</div>
           </div>
           <div class="card" style="margin-bottom:0">
             <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Cash Banked YTD</div>
@@ -9338,9 +9468,10 @@ function renderCRMCommissions() {
           </table>
         </div>
       ` : `
-        <div style="padding:40px;text-align:center;color:var(--muted)">
-          <div style="font-size:14px;color:var(--white);margin-bottom:8px">No commissions tracked yet</div>
-          <div style="font-size:12px">Open any policy on a deal, expand the <b>Commission</b> section, and pick a USHA product.</div>
+        <div class="empty-state">
+          <div class="empty-state-icon">💰</div>
+          <div class="empty-state-title">No commissions tracked yet</div>
+          <div class="empty-state-msg">Open any policy on a deal, expand the <b>Commission</b> section, and pick a USHA product to start tracking earnings.</div>
         </div>
       `}
     </div>`;
@@ -9484,9 +9615,10 @@ function renderCRMRenewals() {
       ${renderBucket('Later than 90 days', 'var(--muted)', buckets.later, 'later')}
 
       ${totalUpcoming + buckets.overdue.length + buckets.oep.length === 0 ? `
-        <div style="padding:40px;text-align:center;color:var(--muted)">
-          <div style="font-size:14px;color:var(--white);margin-bottom:8px">No upcoming renewals</div>
-          <div style="font-size:12px">Add renewal dates to your policies to see them here.</div>
+        <div class="empty-state">
+          <div class="empty-state-icon">🔄</div>
+          <div class="empty-state-title">No upcoming renewals</div>
+          <div class="empty-state-msg">Add renewal dates to your policies to see them here. Most carriers list this on the policy welcome packet.</div>
         </div>
       ` : ''}
     </div>`;
@@ -10259,6 +10391,106 @@ async function logGmailThreadAsActivity(dealId, threadId) {
 // YTD SALES TAB — production-side view (apps written, AV, taken rates,
 // pace vs. award targets). Distinct from Commissions which is $-side.
 // =====================================================================
+// Status list modal — shows policies in a given status bucket for the selected year.
+// Triggered by clicking a row in the YTD Sales Status Mix card.
+function openStatusListModal(bucket, year) {
+  const yStart = new Date(year, 0, 1);
+  const yEnd   = new Date(year, 11, 31);
+  const inYear = (p) => {
+    const d = parseLocalDate(p.effective_date);
+    return d && d >= yStart && d <= yEnd;
+  };
+  const matchers = {
+    issued:    (p) => p.status === 'active',
+    pending:   (p) => p.status === 'pending',
+    declined:  (p) => ['declined','not_taken','withdrawn'].includes(p.status),
+    cancelled: (p) => ['cancelled','lapsed','expired'].includes(p.status)
+  };
+  const colorMap = {
+    issued:    'var(--success)',
+    pending:   'var(--yellow)',
+    declined:  'var(--muted)',
+    cancelled: 'var(--error)'
+  };
+  const titleMap = {
+    issued:    'Issued Policies',
+    pending:   'Pending Policies',
+    declined:  'Declined / Withdrawn / Not Taken',
+    cancelled: 'Cancelled / Lapsed Policies'
+  };
+  const matcher = matchers[bucket]; if (!matcher) return;
+  const list = (crmPolicies || []).filter(p => inYear(p) && matcher(p));
+  // Sort by effective date desc
+  list.sort((a,b) => (b.effective_date || '').localeCompare(a.effective_date || ''));
+
+  const fmt = n => `$${(Number(n) || 0).toLocaleString(undefined, {maximumFractionDigits:0})}`;
+  const totalAV = list.reduce((a,p) => a + (Number(p.monthly_premium) || 0) * 12, 0);
+
+  const rows = list.map(p => {
+    const c = crmContacts.find(c => c.id === p.contact_id);
+    const name = c ? ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || '—') : '—';
+    const cat = ushaCategoryForPolicy(p) || 'other';
+    const catLabel = { underwritten: 'UW', sgi: 'SGI', supplemental: 'Supp', asc: 'ASC', other: '—' }[cat];
+    const annual = (Number(p.monthly_premium) || 0) * 12;
+    const dateBits = [
+      p.effective_date ? `Eff ${p.effective_date}` : '',
+      p.status === 'cancelled' || p.status === 'lapsed' ? `Status: ${p.status}` : ''
+    ].filter(Boolean).join(' · ');
+    return `
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="closeStatusListModal();setTimeout(()=>openPolicyModal('${p.contact_id}','${p.id}'),50)">
+        <td style="padding:8px 10px;font-size:13px;color:var(--white)">${escapeHTML(name)}</td>
+        <td style="padding:8px 10px;font-size:12px;color:var(--muted)">${escapeHTML(p.plan_name || p.carrier || '—')}</td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--muted)">${catLabel}</td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--muted)">${dateBits}</td>
+        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600;font-size:13px">${fmt(annual)}</td>
+      </tr>`;
+  }).join('') || `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--muted)">No policies in this bucket for ${year}.</td></tr>`;
+
+  // Build modal — reuse a generic overlay
+  const existing = document.getElementById('statusListModal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'statusListModal';
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  modal.style.zIndex = '10000';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:880px;max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" style="color:${colorMap[bucket]}">${titleMap[bucket]}</div>
+          <div class="modal-sub">${list.length} polic${list.length === 1 ? 'y' : 'ies'} · ${fmt(totalAV)} annualized · ${year}</div>
+        </div>
+        <button class="modal-close" onclick="closeStatusListModal()">×</button>
+      </div>
+      <div class="modal-body" style="overflow:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead style="position:sticky;top:0;background:var(--navy);z-index:1">
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Client</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Product</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Channel</th>
+              <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Effective Date</th>
+              <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Annual</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="modal-footer" style="justify-content:flex-end">
+        <button class="btn-primary" style="width:auto;padding:9px 18px;margin-top:0" onclick="closeStatusListModal()">Done</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+window.openStatusListModal = openStatusListModal;
+
+function closeStatusListModal() {
+  const m = document.getElementById('statusListModal');
+  if (m) m.remove();
+}
+window.closeStatusListModal = closeStatusListModal;
+
 function renderCRMYTDSales() {
   const body = document.getElementById('crmWorkspaceBody');
   const fmt = n => `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -10406,12 +10638,12 @@ function renderCRMYTDSales() {
           <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${tr.sgiIssued}/${tr.sgiSubmitted} issued · target ≥65%</div>
         </div>
         <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Status Mix</div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Status Mix <span style="font-size:9px;font-weight:400;text-transform:none;color:var(--muted)">click to view</span></div>
           <div style="font-size:13px;color:var(--white);line-height:1.6">
-            <div><span style="color:var(--success);font-weight:600">${issued.length}</span> issued</div>
-            <div><span style="color:var(--yellow);font-weight:600">${pending.length}</span> pending</div>
-            <div><span style="color:var(--muted);font-weight:600">${declined.length}</span> declined/withdrawn</div>
-            <div><span style="color:var(--error);font-weight:600">${cancelled.length}</span> cancelled</div>
+            <div onclick="openStatusListModal('issued',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px;transition:background 0.1s" onmouseover="this.style.background='rgba(74,222,128,0.08)'" onmouseout="this.style.background=''"><span style="color:var(--success);font-weight:600">${issued.length}</span> issued <span style="color:var(--muted);font-size:11px">›</span></div>
+            <div onclick="openStatusListModal('pending',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px" onmouseover="this.style.background='rgba(253,199,47,0.08)'" onmouseout="this.style.background=''"><span style="color:var(--yellow);font-weight:600">${pending.length}</span> pending <span style="color:var(--muted);font-size:11px">›</span></div>
+            <div onclick="openStatusListModal('declined',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background=''"><span style="color:var(--muted);font-weight:600">${declined.length}</span> declined/withdrawn <span style="color:var(--muted);font-size:11px">›</span></div>
+            <div onclick="openStatusListModal('cancelled',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px" onmouseover="this.style.background='rgba(239,68,68,0.08)'" onmouseout="this.style.background=''"><span style="color:var(--error);font-weight:600">${cancelled.length}</span> cancelled <span style="color:var(--muted);font-size:11px">›</span></div>
           </div>
         </div>
       </div>
@@ -10514,9 +10746,10 @@ function renderCRMYTDSales() {
           </table>
         </div>
       ` : `
-        <div style="padding:40px;text-align:center;color:var(--muted)">
-          <div style="font-size:14px;color:var(--white);margin-bottom:8px">No 2026 sales tracked yet</div>
-          <div style="font-size:12px">Click <strong>Commissions → 📥 Review &amp; Import</strong> to load your 2026 sales export.</div>
+        <div class="empty-state">
+          <div class="empty-state-icon">📊</div>
+          <div class="empty-state-title">No ${year} sales tracked yet</div>
+          <div class="empty-state-msg">Click the <strong>📊 Upload Sales Export</strong> button at the top of this page to load your USHA Sales Report.</div>
         </div>
       `}
     </div>`;
@@ -10524,6 +10757,48 @@ function renderCRMYTDSales() {
 
 // Called once after the page loads to kick off GIS.
 window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
+
+// =====================================================================
+// Global keyboard shortcuts
+//   ⌘K / Ctrl+K  → focus the CRM search bar (works only when CRM is open)
+//   Esc          → close any open modal
+// =====================================================================
+window.addEventListener('keydown', (e) => {
+  // ⌘K / Ctrl+K — focus search
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    const wsModal = document.getElementById('crmWorkspaceModal');
+    const isCrmOpen = wsModal && wsModal.style.display === 'flex';
+    if (!isCrmOpen) return; // only relevant when CRM is open
+    e.preventDefault();
+    const search = document.getElementById('crmSearchBar');
+    if (search) {
+      search.focus();
+      search.select();
+    }
+  }
+  // Esc — close topmost modal
+  if (e.key === 'Escape') {
+    // Topmost modals first (status list modal, confirm dialog, etc.)
+    const statusModal = document.getElementById('statusListModal');
+    if (statusModal) { statusModal.remove(); return; }
+    const confirmModal = document.getElementById('confirmModal');
+    if (confirmModal && confirmModal.style.display === 'flex') {
+      const cancelBtn = document.getElementById('confirmModalCancel');
+      if (cancelBtn) cancelBtn.click();
+      return;
+    }
+    // Then nested modals — deal detail, policy, task, settings
+    const order = ['dealDetailModal', 'policyModal', 'taskModal', 'crmSettingsModalV2', 'crmImportModal'];
+    for (const id of order) {
+      const m = document.getElementById(id);
+      if (m && m.style.display === 'flex') {
+        // Find a close button or the X
+        const x = m.querySelector('.modal-close');
+        if (x) { x.click(); return; }
+      }
+    }
+  }
+});
 
 // =====================================================================
 // END CRM LAYER
@@ -10536,7 +10811,7 @@ window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
 //          status, effectiveDate, submitDate, monthlyPremium]
 // =====================================================================
 
-const BULK_IMPORT_2026_ROWS = [["52Y249522F","Hunter","Flanigan","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-23","2026-04-22",116.11],["52Y249522G","Hunter","Flanigan","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-23","2026-04-22",45.0],["52Y249522L","Hunter","Flanigan","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-04-23","2026-04-22",36.12],["72G219595S","Hunter","Flanigan","AIBCEXECDIAMOND 2015","usha_asc:tier_6_exec_diamond","asc","active","2026-04-23","2026-04-22",93.28],["52Y244644F","Lucero","Sanchez","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-16","2026-04-16",278.82],["52Y244644G","Lucero","Sanchez","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-16","2026-04-16",13.3],["52Y243507B","Melissa","Bernales","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-15","2026-04-15",114.05],["52Y243507C","Melissa","Bernales","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-15","2026-04-15",14.93],["52Y243507D","Melissa","Bernales","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-15","2026-04-15",35.38],["52Y243507G","Melissa","Bernales","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-15","2026-04-15",30.0],["52Y243690B","Lila","Hayes","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-20","2026-04-15",141.43],["52Y243690C","Lila","Hayes","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-20","2026-04-15",14.09],["52Y243690D","Lila","Hayes","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-20","2026-04-15",14.46],["52Y243690G","Lila","Hayes","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-20","2026-04-15",34.95],["52Y243690J","Lila","Hayes","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-20","2026-04-15",10.94],["52Y243690L","Lila","Hayes","SECUREDENTALPLUS LOW","usha:securedentalplus_low","supplemental","active","2026-04-20","2026-04-15",25.59],["52Y244151B","Nicholas","George","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-16","2026-04-15",94.43],["52Y244151C","Nicholas","George","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-16","2026-04-15",29.94],["52Y244151D","Nicholas","George","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-04-16","2026-04-15",46.82],["52Y244151G","Nicholas","George","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-16","2026-04-15",65.0],["52Y244151J","Nicholas","George","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-16","2026-04-15",12.15],["52Y244151L","Nicholas","George","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-16","2026-04-15",41.96],["72G216125S","Lila","Hayes","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-20","2026-04-15",66.28],["72G216394S","Nicholas","George","AIBCEXECDIAMOND 2015","usha_asc:tier_6_exec_diamond","asc","active","2026-04-16","2026-04-15",93.28],["52Y240352F","Mateo","Hernandez","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-13","2026-04-10",152.45],["52Y240352G","Mateo","Hernandez","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-13","2026-04-10",21.6],["70S369459P","Mateo","Hernandez","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","active","2026-04-13","2026-04-10",66.28],["52Y237011F","Jakari","Colenberg","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-05-01","2026-04-08",105.87],["52Y237011G","Jakari","Colenberg","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-05-01","2026-04-08",25.0],["72G212444S","Jakari","Colenberg","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-05-01","2026-04-08",62.95],["52Y234266G","Carolyn","Raymond","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-10","2026-04-06",34.44],["52Y234266H","Carolyn","Raymond","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-10","2026-04-06",29.96],["52Y234266J","Carolyn","Raymond","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-10","2026-04-06",12.15],["52Y234266L","Carolyn","Raymond","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-10","2026-04-06",47.69],["55P030267F","Jessica","Sexton","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-15","2026-04-06",616.23],["55P030267G","Jessica","Sexton","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-04-15","2026-04-06",90.0],["72G211480S","Carolyn","Raymond","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-04-10","2026-04-06",8.78],["72G211725S","Jessica","Sexton","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-15","2026-04-06",66.28],["52Y232139F","Anthony","Yoshino","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-09","2026-04-05",547.4],["52Y232139G","Anthony","Yoshino","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-09","2026-04-05",69.53],["55P030233F","Shannon","Mellenberger","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-04","2026-04-04",146.0],["55P030233G","Shannon","Mellenberger","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-04","2026-04-04",21.6],["72G211016S","Shannon","Mellenberger","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-04","2026-04-04",66.28],["52Y230748L","Lazaro","Perez","SECUREDENTAL HIGH","usha:securedental_high","supplemental","active","2026-04-06","2026-04-03",45.78],["70S368864P","Lazaro","Perez","SCARUBY 2015","usha_asc:sca_tier_2_ruby","asc","active","2026-04-06","2026-04-03",36.28],["52Y228903F","Sateesh","Konapalli","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-02","2026-04-02",223.36],["52Y228903G","Sateesh","Konapalli","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-02","2026-04-02",23.15],["52Y228903J","Sateesh","Konapalli","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-02","2026-04-02",12.15],["52Y228903L","Sateesh","Konapalli","HA-SECDENTPLUS MED","usha:ha_secdentplus_med","supplemental","active","2026-04-02","2026-04-02",39.56],["75GUV26730","Sateesh","Konapalli","ABCEXECUTIVE2020","usha_asc:abcexecutive","asc","active","2026-04-02","2026-04-02",58.28],["02N226639F","Linda","Ketcham","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-15","2026-04-01",438.02],["02N226639G","Linda","Ketcham","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-15","2026-04-01",45.27],["02N226639H","Linda","Ketcham","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-15","2026-04-01",35.75],["52Y226979J","Michelle","Skaggs","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-02","2026-04-01",24.3],["52Y226979L","Michelle","Skaggs","SECUREDENTAL HIGH","usha:securedental_high","supplemental","active","2026-04-02","2026-04-01",62.44],["52Y227736L","Julio","Rivas","SECUREDENTAL MEDIUM","usha:securedental_med","supplemental","active","2026-04-06","2026-04-01",31.04],["72G209301S","Michelle","Skaggs","AIBCRUBY 2015","usha_asc:tier_2_ruby","asc","active","2026-04-02","2026-04-01",36.28],["72G209701S","Julio","Rivas","AIBCRUBY 2015","usha_asc:tier_2_ruby","asc","active","2026-04-06","2026-04-01",32.95],["52Y226120F","Patrick","Condon","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-03","2026-03-31",726.04],["52Y226120G","Patrick","Condon","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-03","2026-03-31",24.27],["75GUV22080","Patrick","Condon","ABCENTREPRENEUR2020","usha_asc:abcentrepreneur","asc","active","2026-04-03","2026-03-31",43.28],["52Y223483F","Fariba","Myers","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-01","2026-03-28",618.2],["52Y223483G","Fariba","Myers","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-28",38.41],["52Y223483H","Fariba","Myers","ACCIDENT BENEFIT FAM","usha:accident_benefit_fam","supplemental","active","2026-04-01","2026-03-28",34.46],["52Y222921F","Bethany","Lachenman","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-27","2026-03-27",654.5],["52Y222921G","Bethany","Lachenman","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-03-27","2026-03-27",30.0],["52Y223017G","George","Lightsey","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-06","2026-03-27",48.97],["52Y223017H","George","Lightsey","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-06","2026-03-27",41.21],["52Y223017J","George","Lightsey","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-06","2026-03-27",12.15],["52Y223017L","George","Lightsey","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-04-06","2026-03-27",38.41],["72G206871S","Bethany","Lachenman","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-27","2026-03-27",66.28],["72G206929S","George","Lightsey","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-04-06","2026-03-27",8.78],["52Y220283F","Jo","Stutts","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-04-01","2026-03-25",477.85],["52Y220283G","Jo","Stutts","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-25",45.27],["52Y221139F","Leroy","Luckey","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-08","2026-03-25",424.74],["52Y221139G","Leroy","Luckey","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-08","2026-03-25",20.0],["52Y221139J","Leroy","Luckey","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-08","2026-03-25",27.49],["52Y221139L","Leroy","Luckey","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-08","2026-03-25",119.27],["72G205767S","Leroy","Luckey","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-08","2026-03-25",66.28],["75GUV11100","Jo","Stutts","ABCENTREPRENEUR2020","usha_asc:abcentrepreneur","asc","active","2026-04-01","2026-03-25",43.28],["52Y217865B","Chastity","Muir","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-17","2026-03-23",263.37],["52Y217865C","Chastity","Muir","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-17","2026-03-23",14.3],["52Y217865D","Chastity","Muir","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-17","2026-03-23",31.02],["52Y217865G","Chastity","Muir","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-17","2026-03-23",25.0],["52Y217865J","Chastity","Muir","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-17","2026-03-23",12.15],["52Y217865L","Chastity","Muir","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-04-17","2026-03-23",27.74],["72G203829S","Chastity","Muir","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-17","2026-03-23",66.28],["52Y213932B","Jenson","Hall","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-23","2026-03-17",178.09],["52Y213932C","Jenson","Hall","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-23","2026-03-17",57.55],["52Y213932D","Jenson","Hall","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-04-23","2026-03-17",71.08],["52Y213932G","Jenson","Hall","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-04-23","2026-03-17",20.0],["52Y213932J","Jenson","Hall","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-23","2026-03-17",15.16],["52Y213932L","Jenson","Hall","SECUREDENTALPLUS LOW","usha:securedentalplus_low","supplemental","active","2026-04-23","2026-03-17",50.92],["72G201413S","Jenson","Hall","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-23","2026-03-17",66.28],["52Y212586B","George","Lightsey","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-01","2026-03-16",95.2],["52Y212586C","George","Lightsey","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-01","2026-03-16",57.33],["52Y212586D","George","Lightsey","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-04-01","2026-03-16",35.53],["52Y212586G","George","Lightsey","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-16",35.0],["72G200577S","George","Lightsey","AIBCEXECDIAMOND 2015","usha_asc:tier_6_exec_diamond","asc","active","2026-04-01","2026-03-16",93.28],["52Y211192B","Jhon","Castellanos","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-04-01","2026-03-14",137.29],["52Y211192C","Jhon","Castellanos","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-04-01","2026-03-14",48.43],["52Y211192D","Jhon","Castellanos","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-04-01","2026-03-14",37.92],["52Y211192G","Jhon","Castellanos","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-14",20.0],["52Y211192H","Jhon","Castellanos","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-04-01","2026-03-14",29.96],["52Y211192L","Jhon","Castellanos","SECUREDENTALPLUS LOW","usha:securedentalplus_low","supplemental","active","2026-04-01","2026-03-14",25.46],["52Y199955H","Melvin","Morlas Gonzales","ACCIDENT BENEFIT FAM","usha:accident_benefit_fam","supplemental","active","2026-04-01","2026-03-12",43.35],["02N225005F","Olivia","Hilke","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-17","2026-03-11",141.41],["02N225005G","Olivia","Hilke","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-17","2026-03-11",20.0],["02N225005L","Olivia","Hilke","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-04-17","2026-03-11",39.24],["52Y198525B","Courtnee","Casados","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-03-12","2026-03-11",357.23],["52Y198525C","Courtnee","Casados","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-03-12","2026-03-11",84.97],["52Y198525D","Courtnee","Casados","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-03-12","2026-03-11",122.82],["52Y198525G","Courtnee","Casados","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-03-12","2026-03-11",85.0],["52Y198525J","Courtnee","Casados","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-12","2026-03-11",17.14],["52Y198525L","Courtnee","Casados","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-03-12","2026-03-11",94.21],["72G198181S","Courtnee","Casados","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-12","2026-03-11",66.28],["72G198230S","Olivia","Hilke","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-04-17","2026-03-11",66.28],["52Y195687B","Kevin","Harris","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-01","2026-03-09",53.06],["52Y195687C","Kevin","Harris","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-04-01","2026-03-09",21.53],["52Y195687D","Kevin","Harris","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-04-01","2026-03-09",17.02],["52Y195687G","Kevin","Harris","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-09",30.0],["52Y195687L","Kevin","Harris","SECUREDENTAL MEDIUM","usha:securedental_med","supplemental","active","2026-04-01","2026-03-09",30.75],["52Y196215B","Brittany","Chase","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-03-10","2026-03-09",154.73],["52Y196215C","Brittany","Chase","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-03-10","2026-03-09",14.09],["52Y196215D","Brittany","Chase","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-03-10","2026-03-09",14.46],["72G196789S","Brittany","Chase","AIBCSAPPHIRE 2015","usha_asc:tier_4_sapphire","asc","active","2026-03-10","2026-03-09",46.28],["52Y195308J","Richard","Joyner","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-01","2026-03-08",59.36],["72G196244S","Richard","Joyner","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-04-01","2026-03-08",8.78],["52Y194954F","Jennifer","Lachenman","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-11","2026-03-07",455.66],["52Y194954G","Jennifer","Lachenman","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-03-11","2026-03-07",35.0],["52Y194954J","Jennifer","Lachenman","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-11","2026-03-07",12.15],["52Y194954L","Jennifer","Lachenman","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","active","2026-03-11","2026-03-07",42.38],["72G195985S","Jennifer","Lachenman","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-11","2026-03-07",66.28],["52Y190111F","Kurukulasuriya Nishini","Fernando","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-04-01","2026-03-02",145.88],["52Y190111G","Kurukulasuriya Nishini","Fernando","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-04-01","2026-03-02",30.0],["52Y190111J","Kurukulasuriya Nishini","Fernando","PREMIERVISION","usha:premier_vision","supplemental","active","2026-04-01","2026-03-02",12.15],["70S365526P","Kurukulasuriya Nishini","Fernando","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","active","2026-04-01","2026-03-02",66.28],["52Y180799F","Antonio","Lewis","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-02-20","2026-02-20",239.54],["52Y180799G","Antonio","Lewis","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-02-20","2026-02-20",16.86],["52Y180147F","Manogna","Pilli","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-05","2026-02-19",346.4],["72G187117S","Manogna","Pilli","AIBCSAPPHIRE 2015","usha_asc:tier_4_sapphire","asc","active","2026-03-05","2026-02-19",46.28],["02N223168F","Megan","Wood","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-03-01","2026-02-17",136.12],["52Y177753F","Brenda","Jepkoech","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-02-18","2026-02-17",279.31],["52Y177753J","Brenda","Jepkoech","PREMIERVISION","usha:premier_vision","supplemental","active","2026-02-18","2026-02-17",13.12],["52Y177753L","Brenda","Jepkoech","HA-SECDENTPLUS MED","usha:ha_secdentplus_med","supplemental","active","2026-02-18","2026-02-17",36.62],["72G185263S","Megan","Wood","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-01","2026-02-17",66.28],["75GUU51240","Brenda","Jepkoech","ABCEXECUTIVE2020","usha_asc:abcexecutive","asc","active","2026-02-18","2026-02-17",58.28],["02N223122F","Emily","Wood","HEALTHACCESS III","usha:healthaccess","sgi","active","2026-03-01","2026-02-16",327.91],["02N223122H","Emily","Wood","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-03-01","2026-02-16",35.75],["02N223122J","Emily","Wood","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-01","2026-02-16",12.15],["52Y176038J","Diane","Baus","PREMIERVISION","usha:premier_vision","supplemental","active","2026-03-01","2026-02-16",12.15],["52Y176038L","Diane","Baus","SECUREDENTAL HIGH","usha:securedental_high","supplemental","active","2026-03-01","2026-02-16",34.68],["72G184729S","Diane","Baus","AIBCRUBY 2015","usha_asc:tier_2_ruby","asc","active","2026-03-01","2026-02-16",36.28],["52Y175243B","Michael","Wajchert","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-03-01","2026-02-14",432.37],["52Y175243C","Michael","Wajchert","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-03-01","2026-02-14",92.9],["52Y175243D","Michael","Wajchert","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-03-01","2026-02-14",276.91],["72G184207S","Michael","Wajchert","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-01","2026-02-14",66.28],["52Y162795F","Carlos","Spencer","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","lapsed","2026-02-04","2026-01-31",0],["52Y162795J","Carlos","Spencer","PREMIERVISION","usha:premier_vision","supplemental","lapsed","2026-02-04","2026-01-31",0],["70S362424P","Carlos","Spencer","SCAEMERALD 2015","usha_asc:sca_tier_3_emerald","asc","lapsed","2026-02-04","2026-01-31",3.33],["52Y156485B","Laura","Bessey","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-02-01","2026-01-24",402.39],["52Y156485C","Laura","Bessey","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-02-01","2026-01-24",78.59],["52Y156485D","Laura","Bessey","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","active","2026-02-01","2026-01-24",71.86],["52Y156485G","Laura","Bessey","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-02-01","2026-01-24",90.01],["70S361661P","Laura","Bessey","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","active","2026-02-01","2026-01-24",66.28],["52Y155209B","Mike","Jaworski","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-02-01","2026-01-23",279.56],["52Y155209C","Mike","Jaworski","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","active","2026-02-01","2026-01-23",14.3],["52Y155209D","Mike","Jaworski","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","active","2026-02-01","2026-01-23",25.85],["52Y155362B","Victoria","Kroeger","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","cancelled","2026-02-01","2026-01-23",0],["52Y155362C","Victoria","Kroeger","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","cancelled","2026-02-01","2026-01-23",0],["52Y155362D","Victoria","Kroeger","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","cancelled","2026-02-01","2026-01-23",0],["52Y155362G","Victoria","Kroeger","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","cancelled","2026-02-01","2026-01-23",0],["52Y155741F","Deborahn","Holmes","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-02-23","2026-01-23",0],["52Y155741G","Deborahn","Holmes","CRITICAL ILLNESS","usha:critical_illness","supplemental","not_taken","2026-02-23","2026-01-23",0],["52Y155741J","Deborahn","Holmes","PREMIERVISION","usha:premier_vision","supplemental","not_taken","2026-02-23","2026-01-23",0],["52Y155741L","Deborahn","Holmes","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","not_taken","2026-02-23","2026-01-23",0],["52Y155944B","Melanie","Ried","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-03-01","2026-01-23",71.07],["52Y155944C","Melanie","Ried","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-03-01","2026-01-23",39.38],["52Y155944D","Melanie","Ried","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-03-01","2026-01-23",27.57],["72G172556S","Mike","Jaworski","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-02-01","2026-01-23",66.28],["72G172638S","Victoria","Kroeger","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","cancelled","2026-02-01","2026-01-23",3.33],["72G172939S","Melanie","Ried","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-03-01","2026-01-23",66.28],["52Y153012B","Ezoza","Bahronova","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","not_taken","2026-01-24","2026-01-21",0],["52Y153012C","Ezoza","Bahronova","PREMIERCHOICE-15","usha:premier_choice_saw","underwritten","not_taken","2026-01-24","2026-01-21",0],["52Y153012D","Ezoza","Bahronova","PREMCH HEALTH WELL","usha:premch_health_wellness","underwritten","not_taken","2026-01-24","2026-01-21",0],["52Y153012G","Ezoza","Bahronova","CRITICAL ILLNESS","usha:critical_illness","supplemental","not_taken","2026-01-24","2026-01-21",0],["52Y153012L","Ezoza","Bahronova","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","not_taken","2026-01-24","2026-01-21",0],["72G171393S","Ezoza","Bahronova","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-01-24","2026-01-21",3.33],["52Y149646H","Carol","Doyle","ACCIDENT BENEFIT SIN","usha:accident_benefit_sin","supplemental","active","2026-02-01","2026-01-17",14.96],["52Y149646J","Carol","Doyle","PREMIERVISION","usha:premier_vision","supplemental","active","2026-02-01","2026-01-17",12.15],["52Y149646L","Carol","Doyle","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-02-01","2026-01-17",29.8],["72G169781S","Carol","Doyle","AIBC PRO","usha_asc:aibc_pro_aca","asc","active","2026-02-01","2026-01-17",8.78],["52Y147590F","Davon","Knight","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-01-19","2026-01-16",0],["52Y147590G","Davon","Knight","CRITICAL ILLNESS","usha:critical_illness","supplemental","not_taken","2026-01-19","2026-01-16",0],["70S360841P","Davon","Knight","SCADIAMOND 2015","usha_asc:sca_tier_5_diamond","asc","not_taken","2026-01-19","2026-01-16",3.33],["52Y146570F","Ashley","Hall","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-02-01","2026-01-15",194.16],["52Y146570G","Ashley","Hall","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-02-01","2026-01-15",20.0],["72G168255S","Ashley","Hall","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-02-01","2026-01-15",66.28],["52Y142879F","Eric","Baron","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-02-01","2026-01-13",0],["52Y142879G","Eric","Baron","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","not_taken","2026-02-01","2026-01-13",0],["72G165502S","Eric","Baron","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-02-01","2026-01-13",3.33],["52Y141873F","Edgar","Garcia","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","not_taken","2026-01-15","2026-01-12",0],["52Y141873L","Edgar","Garcia","SECUREDENTALPLUS MED","usha:securedentalplus_med","supplemental","not_taken","2026-01-15","2026-01-12",0],["72G164749S","Edgar","Garcia","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-01-15","2026-01-12",3.33],["52Y139920B","Benjamin","Miller","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-02-02","2026-01-09",88.52],["52Y139920C","Benjamin","Miller","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-02-02","2026-01-09",47.4],["52Y139920D","Benjamin","Miller","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-02-02","2026-01-09",24.66],["52Y139920G","Benjamin","Miller","CRITICAL ILLNESS","usha:critical_illness","supplemental","active","2026-02-02","2026-01-09",35.0],["72G163301S","Benjamin","Miller","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-02-02","2026-01-09",66.28],["52Y138755L","Nabihah","Greco","SECUREDENTAL HIGH","usha:securedental_high","supplemental","cancelled","2026-01-08","2026-01-08",0],["70S359384P","Nabihah","Greco","SCARUBY 2015","usha_asc:sca_tier_2_ruby","asc","cancelled","2026-01-08","2026-01-08",0],["52Y131852B","Mark","Morgan","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-01-01","2025-12-30",362.0],["52Y131852C","Mark","Morgan","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-01-01","2025-12-30",117.36],["52Y131852D","Mark","Morgan","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-01-01","2025-12-30",93.52],["52Y132494B","Evon","Royal","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","active","2026-01-28","2025-12-30",214.24],["52Y132494C","Evon","Royal","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","active","2026-01-28","2025-12-30",82.84],["52Y132494D","Evon","Royal","SECADV HLTH PLUS","usha:secadv_hlth_plus","sgi","active","2026-01-28","2025-12-30",65.64],["52Y132494G","Evon","Royal","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","active","2026-01-28","2025-12-30",90.0],["52Y132494L","Evon","Royal","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-01-28","2025-12-30",80.66],["72G157113S","Mark","Morgan","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-01-01","2025-12-30",66.28],["72G157604S","Evon","Royal","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","active","2026-01-28","2025-12-30",66.28],["02N219098F","Oscar","Herrera","PREMIERADVANTAGE-24","usha:premier_advantage_24","underwritten","active","2026-01-05","2025-12-28",222.23],["02N219098H","Oscar","Herrera","ACCIDENT BENEFIT FAM","usha:accident_benefit_fam","supplemental","active","2026-01-05","2025-12-28",49.46],["02N219098L","Oscar","Herrera","SECUREDENTALPLUS HIG","usha:securedentalplus_high","supplemental","active","2026-01-05","2025-12-28",91.2],["55P027923B","Benjamin","Chvojicek","SECURE ADV SICKNESS","usha:secureadv_sickness","sgi","not_taken","2026-01-01","2025-12-15",0],["55P027923C","Benjamin","Chvojicek","SECURE ADV ACCIDENT","usha:secureadv_accident","sgi","not_taken","2026-01-01","2025-12-15",0],["55P027923D","Benjamin","Chvojicek","SECADV HLTH WELL PLS","usha:secadv_hlth_well_pls","sgi","not_taken","2026-01-01","2025-12-15",0],["55P027923G","Benjamin","Chvojicek","CRITICAL ILLNESS FAM","usha:critical_illness_fam","supplemental","not_taken","2026-01-01","2025-12-15",0],["72G148772S","Benjamin","Chvojicek","AIBCDIAMOND 2015","usha_asc:tier_5_diamond","asc","not_taken","2026-01-01","2025-12-15",3.33]];
+const BULK_IMPORT_2026_ROWS = [];  /* inline data removed — use YTD Sales > Upload Sales Export */
 
 const BULK_IMPORT_FIELDS = ['app_id','first_name','last_name','product_label','commission_product','category','status','effective_date','submit_date','monthly_premium'];
 function bulkImportRowToObj(r) {
@@ -10874,7 +11149,7 @@ getBonusTakenRates = function() {
 // Source of truth for the YTD KPI cards (replaces rate-book estimates)
 // =====================================================================
 
-const PAY_DATA_2026 = {"paychecks":[{"pay_date":"01/08/2026","period_start":"12/31/2025","period_end":"01/08/2026","advances":4037.77,"misc_bonus":0.0,"misc_desc":"","total_payout":4037.77,"beg_reserve":23021.43,"end_reserve":20050.64,"chargebacks":-4989.44,"reinstatements":0.0},{"pay_date":"01/15/2026","period_start":"01/09/2026","period_end":"01/15/2026","advances":1783.68,"misc_bonus":7732.0,"misc_desc":"Dec 2025 Personal Production Bonus (EFT)","total_payout":9515.68,"beg_reserve":20050.64,"end_reserve":16874.31,"chargebacks":-4068.06,"reinstatements":0.0},{"pay_date":"01/22/2026","period_start":"01/16/2026","period_end":"01/22/2026","advances":757.11,"misc_bonus":0.0,"misc_desc":"","total_payout":757.11,"beg_reserve":16874.31,"end_reserve":16392.99,"chargebacks":-1003.15,"reinstatements":143.32},{"pay_date":"01/29/2026","period_start":"01/23/2026","period_end":"01/29/2026","advances":3539.59,"misc_bonus":0.0,"misc_desc":"","total_payout":3539.59,"beg_reserve":16392.99,"end_reserve":16839.58,"chargebacks":-2326.13,"reinstatements":1003.15},{"pay_date":"02/05/2026","period_start":"01/30/2026","period_end":"02/05/2026","advances":0.0,"misc_bonus":0.0,"misc_desc":"","total_payout":0.0,"beg_reserve":16839.58,"end_reserve":12790.89,"chargebacks":-4048.69,"reinstatements":0.0},{"pay_date":"02/12/2026","period_start":"02/06/2026","period_end":"02/12/2026","advances":1118.79,"misc_bonus":0.0,"misc_desc":"","total_payout":1118.79,"beg_reserve":12790.89,"end_reserve":13206.88,"chargebacks":-143.32,"reinstatements":0.0},{"pay_date":"02/19/2026","period_start":"02/13/2026","period_end":"02/19/2026","advances":1641.45,"misc_bonus":0.0,"misc_desc":"","total_payout":1641.45,"beg_reserve":13206.88,"end_reserve":12146.52,"chargebacks":-1880.96,"reinstatements":0.0},{"pay_date":"02/26/2026","period_start":"02/20/2026","period_end":"02/26/2026","advances":471.13,"misc_bonus":0.0,"misc_desc":"","total_payout":471.13,"beg_reserve":12146.52,"end_reserve":7818.94,"chargebacks":-4563.11,"reinstatements":0.0},{"pay_date":"03/05/2026","period_start":"02/27/2026","period_end":"03/05/2026","advances":415.36,"misc_bonus":0.0,"misc_desc":"","total_payout":415.36,"beg_reserve":7818.94,"end_reserve":5838.88,"chargebacks":-2187.7,"reinstatements":0.0},{"pay_date":"03/12/2026","period_start":"03/06/2026","period_end":"03/12/2026","advances":2735.6,"misc_bonus":0.0,"misc_desc":"","total_payout":2735.6,"beg_reserve":5838.88,"end_reserve":5612.86,"chargebacks":-1593.62,"reinstatements":0.0},{"pay_date":"03/19/2026","period_start":"03/13/2026","period_end":"03/19/2026","advances":1029.41,"misc_bonus":0.0,"misc_desc":"","total_payout":1029.41,"beg_reserve":5612.86,"end_reserve":4940.46,"chargebacks":-1187.04,"reinstatements":0.0},{"pay_date":"03/26/2026","period_start":"03/20/2026","period_end":"03/26/2026","advances":1790.27,"misc_bonus":0.0,"misc_desc":"","total_payout":1790.27,"beg_reserve":4940.46,"end_reserve":5303.97,"chargebacks":-306.84,"reinstatements":0.0},{"pay_date":"04/02/2026","period_start":"03/27/2026","period_end":"04/02/2026","advances":4624.08,"misc_bonus":0.0,"misc_desc":"","total_payout":4624.08,"beg_reserve":5303.97,"end_reserve":6044.31,"chargebacks":-1101.66,"reinstatements":0.0},{"pay_date":"04/09/2026","period_start":"04/03/2026","period_end":"04/09/2026","advances":2812.16,"misc_bonus":0.0,"misc_desc":"","total_payout":2812.16,"beg_reserve":6044.31,"end_reserve":7074.88,"chargebacks":0.0,"reinstatements":0.0},{"pay_date":"04/16/2026","period_start":"04/10/2026","period_end":"04/16/2026","advances":2719.94,"misc_bonus":0.0,"misc_desc":"","total_payout":2719.94,"beg_reserve":7074.88,"end_reserve":7781.56,"chargebacks":-236.42,"reinstatements":0.0},{"pay_date":"04/23/2026","period_start":"04/17/2026","period_end":"04/23/2026","advances":509.89,"misc_bonus":0.0,"misc_desc":"","total_payout":509.89,"beg_reserve":7781.56,"end_reserve":6986.31,"chargebacks":-1005.24,"reinstatements":0.0}],"account_ytd":{"Begin Balance":49245.4,"Earned Advance":-18996.55,"As Earned":-3040.57,"Advances":19320.16,"E&O":126.0,"Interest":579.18,"Appointment Fees":115.0,"Payout":2736.78,"End Balance":0.0},"earnings":{"As Earned - Total":{"monthly_first_year":849.89,"monthly_renewal":0.0,"monthly_total":849.89,"ytd_first_year":3040.57,"ytd_renewal":0.0,"ytd_total":3040.57},"Earned Advance - Total":{"monthly_first_year":6767.72,"monthly_renewal":0.0,"monthly_total":6767.72,"ytd_first_year":18996.55,"ytd_renewal":0.0,"ytd_total":18996.55},"Totals":{"monthly_first_year":7617.61,"monthly_renewal":0.0,"monthly_total":7617.61,"ytd_first_year":22037.12,"ytd_renewal":0.0,"ytd_total":22037.12}},"as_of":"2026-04-23"};
+const PAY_DATA_2026 = null;  /* inline pay data removed — use YTD Sales > Upload Paycheck PDF, data lives in Supabase paychecks table */
 
 function getActualYTD() {
   if (typeof PAY_DATA_2026 === 'undefined' || !PAY_DATA_2026) return null;
