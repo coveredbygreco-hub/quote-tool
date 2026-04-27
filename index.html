@@ -11222,6 +11222,94 @@ function renderCRMYTDSales() {
 window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
 
 // =====================================================================
+// LEAD PREFILL HANDLER — accepts data from the Chrome extension via
+// #prefill=<base64-encoded JSON> URL hash. Pre-fills ZIP, income, and
+// stashes contact info for the Save Lead modal to consume.
+// =====================================================================
+(function handleLeadPrefillFromHash() {
+  const m = (location.hash || '').match(/[#&]prefill=([^&]+)/);
+  if (!m) return;
+  let lead = null;
+  try {
+    // base64 → URL-encoded UTF-8 JSON (matches popup.js encoding)
+    const decoded = decodeURIComponent(escape(atob(m[1])));
+    lead = JSON.parse(decoded);
+  } catch (e) {
+    console.warn('[CBG] prefill decode failed:', e);
+    return;
+  }
+  if (!lead || typeof lead !== 'object') return;
+  // Stash for the Save Lead modal + run the prefill once the DOM is ready
+  window.__cbgPendingLeadPrefill = lead;
+  const apply = () => applyCBGLeadPrefill(lead);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(apply, 200));
+  } else {
+    setTimeout(apply, 200);
+  }
+})();
+
+function applyCBGLeadPrefill(lead) {
+  if (!lead) return;
+  // ZIP — drives the county lookup
+  if (lead.zip) {
+    const zip = document.getElementById('zipCode');
+    if (zip) {
+      zip.value = String(lead.zip).slice(0, 5);
+      zip.dispatchEvent(new Event('input', { bubbles: true }));
+      zip.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+  // Annual income
+  if (lead.income) {
+    const inc = document.getElementById('income');
+    if (inc) {
+      const n = String(lead.income).replace(/[^0-9.]/g, '');
+      if (n) {
+        inc.value = n;
+        inc.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+  }
+  // Show a small confirm toast so Emanuel knows the data landed
+  if (typeof showToast === 'function') {
+    const fields = Object.keys(lead).filter(k => !k.startsWith('_') && k !== 'source').length;
+    showToast(`Lead prefilled · ${fields} field${fields === 1 ? '' : 's'} from ${lead.source || 'extension'}`, 'success');
+  }
+  // Also pre-fill the Save Lead modal when it opens — patch openSaveLeadModal to read __cbgPendingLeadPrefill
+  // (Existing implementation will read the stashed data.)
+  // Clear the hash so re-opening the page doesn't re-trigger
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
+}
+window.applyCBGLeadPrefill = applyCBGLeadPrefill;
+
+// Patch the Save Lead modal opener (if present) to consume the stashed prefill.
+(function wireSaveLeadPrefillConsumer() {
+  if (typeof window.openSaveLeadModal !== 'function') return;
+  const orig = window.openSaveLeadModal;
+  window.openSaveLeadModal = function() {
+    const result = orig.apply(this, arguments);
+    const lead = window.__cbgPendingLeadPrefill;
+    if (!lead) return result;
+    // Best-effort field fill — only set when the input exists and is empty
+    const setIfEmpty = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && !el.value && val) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    };
+    const firstName = lead.firstName || (lead.fullName || '').split(' ')[0] || '';
+    const lastName  = lead.lastName  || (lead.fullName || '').split(' ').slice(1).join(' ') || '';
+    setIfEmpty('saveLeadFirstName', firstName);
+    setIfEmpty('saveLeadLastName',  lastName);
+    setIfEmpty('saveLeadEmail',     lead.email);
+    setIfEmpty('saveLeadPhone',     lead.phone);
+    setIfEmpty('saveLeadDOB',       lead.dob);
+    setIfEmpty('saveLeadIncome',    lead.income);
+    setIfEmpty('saveLeadAddress',   lead.address);
+    return result;
+  };
+})();
+
+// =====================================================================
 // Global keyboard shortcuts
 //   ⌘K / Ctrl+K  → focus the CRM search bar (works only when CRM is open)
 //   Esc          → close any open modal
