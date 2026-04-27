@@ -11251,6 +11251,19 @@ window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
 
 function applyCBGLeadPrefill(lead) {
   if (!lead) return;
+  // Client name on the main quote page — "First Last"
+  try {
+    const nameEl = document.getElementById('clientName');
+    if (nameEl && !nameEl.value) {
+      const fullName = lead.firstName
+        ? `${lead.firstName}${lead.lastName ? ' ' + lead.lastName : ''}`.trim()
+        : (lead.fullName || '').trim();
+      if (fullName) {
+        nameEl.value = fullName;
+        nameEl.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+  } catch (_) {}
   // ZIP — drives the county lookup
   if (lead.zip) {
     const zip = document.getElementById('zipCode');
