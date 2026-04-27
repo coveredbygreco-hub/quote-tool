@@ -1991,6 +1991,17 @@
         </div>
       </div>
 
+      <!-- RentCast property API -->
+      <div style="padding:14px 16px;border:0.5px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:var(--space-2);background:var(--bg-surface-1);transition:background 0.15s,border-color 0.15s" onmouseover="this.style.background='var(--bg-surface-2)'" onmouseout="this.style.background='var(--bg-surface-1)'">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:14px;font-weight:500;color:var(--text-1);margin-bottom:2px;letter-spacing:-0.005em">Property values · ZIP avg (free) + RentCast (optional)</div>
+            <div style="font-size:12px;color:var(--text-3);line-height:1.45">Tier A/B/C runs on Census ZIP-level home values by default. Add a RentCast key for per-property accuracy · <span id="settingsV2_rcState">—</span></div>
+          </div>
+          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(openRentCastSettings, 50)" style="padding:7px 14px;font-size:12px;width:auto;margin:0;flex-shrink:0">Configure</button>
+        </div>
+      </div>
+
       <!-- Change password -->
       <div style="padding:14px 16px;border:0.5px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:var(--space-2);background:var(--bg-surface-1);transition:background 0.15s,border-color 0.15s" onmouseover="this.style.background='var(--bg-surface-2)'" onmouseout="this.style.background='var(--bg-surface-1)'">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -10461,6 +10472,17 @@ function refreshSettingsModalV2State() {
       dbState.style.color = 'var(--muted)';
     }
   }
+  // RentCast property API
+  const rcState = document.getElementById('settingsV2_rcState');
+  if (rcState) {
+    if (typeof getRentCastApiKey === 'function' && getRentCastApiKey()) {
+      rcState.textContent = '✓ API key set';
+      rcState.style.color = 'var(--success)';
+    } else {
+      rcState.textContent = 'Not configured';
+      rcState.style.color = 'var(--muted)';
+    }
+  }
 }
 
 // Build the Calendar API event body from a task row.
@@ -11410,6 +11432,9 @@ function openCBGLeadReview(lead) {
         ${cbgReviewField('Notes', 'rev_notes', lead.notes, 'textarea', 'grid-column:1 / -1')}
       </div>
 
+      <div id="cbgLeadValueHost"></div>
+      <div id="cbgIncomeAssessHost"></div>
+
       <div id="cbgReviewError" style="display:none;background:rgba(239,68,68,0.1);color:#fca5a5;border:0.5px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 12px;margin-top:14px;font-size:12.5px"></div>
 
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap">
@@ -11427,6 +11452,19 @@ function openCBGLeadReview(lead) {
   document.getElementById('cbgReviewCancel').onclick = closeIt;
   document.getElementById('cbgReviewSave').onclick     = () => cbgReviewSubmit(false);
   document.getElementById('cbgReviewSavePush').onclick = () => cbgReviewSubmit(true);
+
+  // Auto-classify on open + re-classify when key fields change (debounced)
+  if (typeof runLeadValueClassification === 'function') {
+    setTimeout(() => runLeadValueClassification(), 50);
+    let debounceTimer;
+    ['rev_address','rev_city','rev_state','rev_zip','rev_income','rev_household'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => runLeadValueClassification(), 600);
+      });
+    });
+  }
 }
 
 function cbgReviewField(label, id, val, type, extraStyle) {
@@ -11530,6 +11568,352 @@ async function cbgReviewSubmit(pushToCRM) {
   document.getElementById('cbgLeadReviewModal')?.remove();
 }
 window.openCBGLeadReview = openCBGLeadReview;
+
+// =====================================================================
+// LEAD TIER CLASSIFIER — uses RentCast property API + 400% FPL income
+// cliff to bucket leads into A (private plan target), B (subsidy lead),
+// or C (skip — apartment / multifamily).
+// =====================================================================
+
+const RENTCAST_KEY_STORAGE = 'cbg_rentcast_key_v1';
+function getRentCastApiKey() {
+  try { return localStorage.getItem(RENTCAST_KEY_STORAGE) || ''; } catch (_) { return ''; }
+}
+function setRentCastApiKey(key) {
+  try {
+    if (key) localStorage.setItem(RENTCAST_KEY_STORAGE, key);
+    else localStorage.removeItem(RENTCAST_KEY_STORAGE);
+  } catch (_) {}
+}
+
+// 2025 Federal Poverty Level (drives 2026 plan year subsidies). Below 400% FPL
+// = subsidy eligible under hard-cliff rules.
+const FPL_2025 = { 1:15650, 2:21150, 3:26650, 4:32150, 5:37650, 6:43150, 7:48650, 8:54150 };
+function fpl400ForHousehold(size) {
+  const n = parseInt(size, 10) || 1;
+  if (n <= 8) return FPL_2025[n] * 4;
+  return (FPL_2025[8] + (n - 8) * 5500) * 4;
+}
+
+// Detect apartment / unit text in the address
+function looksLikeApartmentAddress(address) {
+  if (!address) return false;
+  return /\b(apt|apartment|unit|suite|ste|#\s*\d|fl\s*\d|floor\s*\d)\b/i.test(address);
+}
+
+// Pull ZIP-level median home value from US Census ACS 5-year API. Free,
+// unlimited, no API key needed. Returns {price, source: 'census-zip'} or null.
+// Cached in localStorage forever per ZIP — Census data only updates yearly.
+async function fetchCensusZipMedianValue(zip) {
+  if (!zip || !/^\d{5}$/.test(zip)) return null;
+  const cacheKey = 'cbg_census_zip_' + zip;
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    // Cache 30 days — ACS only updates once a year anyway
+    if (cached && (Date.now() - cached._at) < 30 * 24 * 60 * 60 * 1000) return cached.data;
+  } catch (_) {}
+  // ACS variable B25077_001E = Median Home Value (Owner-Occupied Housing Units)
+  const url = `https://api.census.gov/data/2022/acs/acs5?get=B25077_001E,NAME&for=zip%20code%20tabulation%20area:${zip}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Census ' + res.status);
+    const arr = await res.json();
+    // arr[0] = headers, arr[1] = [median_value, name, zcta]
+    if (!arr || !arr[1]) return null;
+    const raw = arr[1][0];
+    const price = parseInt(raw, 10);
+    if (isNaN(price) || price <= 0) return null;
+    const data = { price, source: 'census-zip', zip };
+    try { localStorage.setItem(cacheKey, JSON.stringify({ _at: Date.now(), data })); } catch (_) {}
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Optional per-property override via RentCast — only called if user has a key.
+async function fetchRentCastValue(address, city, state, zip) {
+  const key = getRentCastApiKey();
+  if (!key || !address) return null;
+  const fullAddr = [address, city, state, zip].filter(Boolean).join(', ');
+  const url = `https://api.rentcast.io/v1/avm/value?address=${encodeURIComponent(fullAddr)}`;
+  const cacheKey = 'cbg_rc_' + btoa(unescape(encodeURIComponent(fullAddr.toLowerCase())));
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+    if (cached && (Date.now() - cached._at) < 24 * 60 * 60 * 1000) return cached.data;
+  } catch (_) {}
+  const res = await fetch(url, { headers: { 'X-Api-Key': key, 'Accept': 'application/json' } });
+  if (!res.ok) {
+    if (res.status === 404) return { _notFound: true };
+    throw new Error(`RentCast ${res.status}`);
+  }
+  const data = await res.json();
+  data.source = 'rentcast';
+  try { sessionStorage.setItem(cacheKey, JSON.stringify({ _at: Date.now(), data })); } catch (_) {}
+  return data;
+}
+
+// Classify a lead into a tier — driven by ADDRESS only (apartment detection +
+// ZIP-level home value). Income is shown separately because lead-source income
+// is often unreliable. Returns {tier, color, label, pitch, value, source, reasons}
+function classifyLeadTier({ address, propertyData }) {
+  const reasons = [];
+  let estValue = null;
+  let propertyType = null;
+  let source = null;
+
+  if (propertyData && !propertyData._notFound) {
+    estValue = propertyData.price || null;
+    propertyType = propertyData.propertyType || null;
+    source = propertyData.source || null;
+  }
+  const aptByText = looksLikeApartmentAddress(address);
+  const aptByApi  = /apartment|multi[-\s]?family/i.test(propertyType || '');
+
+  // Tier C — apartment / unit / multi-family
+  if (aptByText || aptByApi) {
+    return {
+      tier: 'C',
+      color: 'red',
+      label: 'Skip — apartment complex',
+      pitch: 'Renter / multi-unit. Lower close rate; deprioritize.',
+      value: estValue,
+      source,
+      propertyType: propertyType || (aptByText ? 'Apartment (from address)' : null),
+      reasons: aptByApi ? ['RentCast: ' + propertyType] : ['Apartment indicator in street address']
+    };
+  }
+
+  // Address-based tiers using home value thresholds
+  const HIGH_VALUE_THRESHOLD = 400000;
+  if (estValue && estValue >= HIGH_VALUE_THRESHOLD) {
+    reasons.push(`Home value $${estValue.toLocaleString()} ≥ $${HIGH_VALUE_THRESHOLD.toLocaleString()}`);
+    return {
+      tier: 'A',
+      color: 'green',
+      label: 'Full Price / Private Plan',
+      pitch: 'High-value homeowner. Likely ineligible for ACA subsidy. Position premium private plan.',
+      value: estValue,
+      source,
+      propertyType: propertyType || 'Single Family (assumed)',
+      reasons
+    };
+  }
+
+  // Tier B — moderate-value homeowner (subsidy lead)
+  if (estValue) reasons.push(`Home value $${estValue.toLocaleString()} < $${HIGH_VALUE_THRESHOLD.toLocaleString()}`);
+  else reasons.push('No property data yet — defaulting to subsidy lead');
+  return {
+    tier: 'B',
+    color: 'yellow',
+    label: 'ACA Subsidy Eligible',
+    pitch: 'Homeowner in subsidy range. Emphasize tax credit savings and plan options.',
+    value: estValue,
+    source,
+    propertyType: propertyType || 'Single Family (assumed)',
+    reasons
+  };
+}
+
+// Separate income-vs-FPL assessment — shown next to the address-based tier
+// so you can see whether the reported income corroborates or contradicts the
+// address signal. Returns {status, color, label, detail, fplCutoff, ratio}
+function assessIncomeForSubsidy({ income, householdSize }) {
+  const incomeNum = (income == null || income === '') ? null : Number(String(income).replace(/[^0-9.]/g, ''));
+  const hh = parseInt(householdSize, 10) || 1;
+  const cutoff = fpl400ForHousehold(hh);
+  const fpl100 = FPL_2025[Math.min(8, hh)] + Math.max(0, hh - 8) * 5500;
+
+  if (incomeNum == null || incomeNum <= 0) {
+    return {
+      status: 'unknown',
+      color: 'gray',
+      label: 'Income not provided',
+      detail: `400% FPL for household of ${hh} = $${cutoff.toLocaleString()}. Ask the lead to confirm their household income.`,
+      fplCutoff: cutoff,
+      ratio: null
+    };
+  }
+  const ratio = incomeNum / fpl100;
+  if (incomeNum > cutoff) {
+    return {
+      status: 'above',
+      color: 'green',
+      label: 'Above 400% FPL — no subsidy',
+      detail: `Reported $${incomeNum.toLocaleString()} > $${cutoff.toLocaleString()} (${(ratio * 100).toFixed(0)}% FPL). Pitch private/full-price.`,
+      fplCutoff: cutoff,
+      ratio
+    };
+  }
+  if (incomeNum < fpl100 * 1.38) {
+    return {
+      status: 'medicaid',
+      color: 'red',
+      label: 'Below 138% FPL — possible Medicaid',
+      detail: `Reported $${incomeNum.toLocaleString()} (${(ratio * 100).toFixed(0)}% FPL). May be Medicaid-eligible — check state expansion status.`,
+      fplCutoff: cutoff,
+      ratio
+    };
+  }
+  return {
+    status: 'subsidy',
+    color: 'yellow',
+    label: 'Subsidy eligible',
+    detail: `Reported $${incomeNum.toLocaleString()} ≤ $${cutoff.toLocaleString()} (${(ratio * 100).toFixed(0)}% FPL). Emphasize ACA tax credits.`,
+    fplCutoff: cutoff,
+    ratio
+  };
+}
+
+const TIER_COLOR_MAP = {
+  green:  { bg: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.4)',  text: '#86efac', dot: '#22c55e' },
+  yellow: { bg: 'rgba(253,199,47,0.12)', border: 'rgba(253,199,47,0.4)', text: '#FDC72F', dot: '#FDC72F' },
+  red:    { bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.4)',  text: '#fca5a5', dot: '#ef4444' },
+  gray:   { bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.3)', text: '#cbd5e1', dot: '#94a3b8' }
+};
+
+// Render the address-based Tier badge (top section)
+function renderLeadValueBadge(classification, opts) {
+  const host = document.getElementById('cbgLeadValueHost');
+  if (!host) return;
+  const { tier, color, label, pitch, value, source, propertyType, reasons } = classification;
+  const c = TIER_COLOR_MAP[color] || TIER_COLOR_MAP.yellow;
+  const valStr = value ? `Est. Value: $${Number(value).toLocaleString()}` : 'Est. Value: —';
+  const sourceLabel = source === 'rentcast' ? 'per-property (RentCast)'
+                    : source === 'census-zip' ? 'ZIP avg (Census)'
+                    : 'no property data';
+  const loading = opts && opts.loading;
+
+  host.innerHTML = `
+    <div style="border:0.5px solid ${c.border};background:${c.bg};border-radius:10px;padding:14px 16px;margin-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;gap:8px;background:${c.dot};color:#0A0E1A;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.04em">TIER ${tier}</span>
+        <span style="font-size:13px;font-weight:500;color:${c.text}">[AUTO]</span>
+        <span style="font-size:13px;color:var(--text-1)">${valStr}</span>
+        <span style="font-size:13px;color:${c.text};font-weight:600">| ${label}</span>
+        ${loading ? '<span style="font-size:11px;color:var(--text-3);margin-left:auto">Looking up ZIP…</span>' : `<span style="font-size:10.5px;color:var(--text-3);margin-left:auto;font-style:italic">${sourceLabel}</span>`}
+      </div>
+      ${pitch ? `<div style="font-size:12.5px;color:var(--text-2,rgba(248,249,250,0.75));margin-top:8px;line-height:1.5"><strong style="color:${c.text}">Pitch:</strong> ${pitch}</div>` : ''}
+      ${(propertyType || (reasons && reasons.length)) ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px">${propertyType || ''}${propertyType && reasons && reasons.length ? ' · ' : ''}${reasons && reasons.length ? reasons.join(' · ') : ''}</div>` : ''}
+    </div>
+  `;
+}
+
+// Render the separate Income vs FPL assessment (second section)
+function renderIncomeAssessment(assessment) {
+  const host = document.getElementById('cbgIncomeAssessHost');
+  if (!host) return;
+  const { status, color, label, detail } = assessment;
+  const c = TIER_COLOR_MAP[color] || TIER_COLOR_MAP.gray;
+  const icon = status === 'above'    ? '▲'
+            : status === 'medicaid' ? '⚠'
+            : status === 'subsidy'  ? '✓'
+            : '?';
+  host.innerHTML = `
+    <div style="border:0.5px solid ${c.border};background:${c.bg};border-radius:10px;padding:14px 16px;margin-top:10px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:14px;color:${c.text};font-weight:700;width:18px;text-align:center">${icon}</span>
+        <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;color:var(--text-3);text-transform:uppercase">Income · vs 400% FPL</span>
+        <span style="font-size:13px;color:${c.text};font-weight:600;margin-left:auto">${label}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-2,rgba(248,249,250,0.7));margin-top:8px;line-height:1.5">${detail}</div>
+    </div>
+  `;
+}
+
+// Run classification for the current Lead Review modal — using current form values
+async function runLeadValueClassification() {
+  const host = document.getElementById('cbgLeadValueHost');
+  if (!host) return;
+  const get = (id) => (document.getElementById(id)?.value || '').trim();
+  const address = get('rev_address');
+  const city    = get('rev_city');
+  const state   = get('rev_state');
+  const zip     = get('rev_zip');
+  const incomeRaw = get('rev_income');
+  const income  = incomeRaw ? parseFloat(incomeRaw.replace(/[^0-9.]/g, '')) : null;
+  const householdSize = parseInt(get('rev_household'), 10) || 1;
+
+  // Income assessment is independent — render it immediately
+  renderIncomeAssessment(assessIncomeForSubsidy({ income, householdSize }));
+
+  // First pass — apartment-detection only (instant, no API)
+  let classification = classifyLeadTier({ address, propertyData: null });
+  const isApt = looksLikeApartmentAddress(address);
+  const willFetch = !isApt && (zip || (getRentCastApiKey() && address));
+  renderLeadValueBadge(classification, { loading: willFetch });
+
+  if (isApt) return; // C-tier locked in, skip API calls
+
+  // RentCast (per-property) takes priority if a key is set
+  const rcKey = getRentCastApiKey();
+  if (rcKey && address) {
+    try {
+      const propertyData = await fetchRentCastValue(address, city, state, zip);
+      classification = classifyLeadTier({ address, propertyData });
+      renderLeadValueBadge(classification, { loading: false });
+      return;
+    } catch (e) {
+      // Fall through to Census fallback
+    }
+  }
+
+  // Census ZIP-level (free, unlimited)
+  if (zip) {
+    const propertyData = await fetchCensusZipMedianValue(zip);
+    if (propertyData) {
+      classification = classifyLeadTier({ address, propertyData });
+      renderLeadValueBadge(classification, { loading: false });
+    } else {
+      // Re-render without loading flag
+      renderLeadValueBadge(classification, { loading: false });
+    }
+  } else {
+    renderLeadValueBadge(classification, { loading: false });
+  }
+}
+window.runLeadValueClassification = runLeadValueClassification;
+
+// Settings dialog — paste / clear the RentCast API key
+function openRentCastSettings() {
+  const existing = document.getElementById('cbgRentCastSettings');
+  if (existing) existing.remove();
+  const currentKey = getRentCastApiKey();
+  const masked = currentKey ? currentKey.slice(0, 6) + '…' + currentKey.slice(-4) : '';
+  const modal = document.createElement('div');
+  modal.id = 'cbgRentCastSettings';
+  modal.style.cssText = `position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:'DM Sans',sans-serif`;
+  modal.innerHTML = `
+    <div style="background:var(--bg-surface-1,#0F1421);border:0.5px solid var(--accent-action-border,rgba(253,199,47,0.25));border-radius:14px;padding:24px 26px;max-width:520px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,0.5)">
+      <div style="font-size:17px;font-weight:600;color:var(--text-1);margin-bottom:4px">RentCast API key (optional)</div>
+      <div style="font-size:12.5px;color:var(--text-3);margin-bottom:18px;line-height:1.55">Lead tier already runs on free Census ZIP-level home values. Add a RentCast key only when you want per-property accuracy on a specific high-value lead. Free tier = 50 lookups/month · paid tiers $74+/mo. Most agents don't need this. Stored locally on this device only.</div>
+      <input id="rcKeyInput" type="text" placeholder="${currentKey ? `Current: ${masked}` : 'Paste your RentCast API key'}" style="width:100%;background:var(--bg-surface-2,rgba(255,255,255,0.04));border:0.5px solid rgba(248,249,250,0.12);border-radius:7px;padding:10px 12px;color:var(--text-1);font-size:13px;font-family:inherit;box-sizing:border-box;outline:none" />
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap">
+        ${currentKey ? '<button id="rcClearBtn" style="background:transparent;color:#fca5a5;border:0.5px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;font-family:inherit">Remove key</button>' : ''}
+        <button id="rcCancelBtn" style="background:transparent;color:var(--text-2);border:0.5px solid rgba(248,249,250,0.15);border-radius:8px;padding:10px 18px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+        <button id="rcSaveBtn" style="background:var(--accent-action,#FDC72F);color:#0A0E1A;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  const close = () => modal.remove();
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+  document.getElementById('rcCancelBtn').onclick = close;
+  document.getElementById('rcSaveBtn').onclick = () => {
+    const v = document.getElementById('rcKeyInput').value.trim();
+    if (v) setRentCastApiKey(v);
+    if (typeof showToast === 'function') showToast(v ? 'RentCast key saved.' : 'Key unchanged.', 'success');
+    close();
+  };
+  if (currentKey) {
+    document.getElementById('rcClearBtn').onclick = () => {
+      setRentCastApiKey('');
+      if (typeof showToast === 'function') showToast('RentCast key removed.', 'success');
+      close();
+    };
+  }
+}
+window.openRentCastSettings = openRentCastSettings;
 
 // Fill the Save Lead modal inputs from the stashed lead.
 function applyCBGSaveLeadPrefill(lead) {
