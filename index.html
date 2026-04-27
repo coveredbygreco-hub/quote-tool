@@ -11271,20 +11271,21 @@ window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
 // #prefill=<base64-encoded JSON> URL hash. Pre-fills ZIP, income, and
 // stashes contact info for the Save Lead modal to consume.
 // =====================================================================
-(function handleLeadPrefillFromHash() {
+// Decode a #prefill=<base64> hash and run the prefill flow. Used both on
+// initial page load AND when the extension navigates an already-open Quote
+// Tool tab to a new prefill hash (which fires a hashchange, NOT a reload).
+function cbgRunPrefillFromHash() {
   const m = (location.hash || '').match(/[#&]prefill=([^&]+)/);
-  if (!m) return;
+  if (!m) return false;
   let lead = null;
   try {
-    // base64 → URL-encoded UTF-8 JSON (matches popup.js encoding)
     const decoded = decodeURIComponent(escape(atob(m[1])));
     lead = JSON.parse(decoded);
   } catch (e) {
     console.warn('[CBG] prefill decode failed:', e);
-    return;
+    return false;
   }
-  if (!lead || typeof lead !== 'object') return;
-  // Stash for the Save Lead modal + run the prefill once the DOM is ready
+  if (!lead || typeof lead !== 'object') return false;
   window.__cbgPendingLeadPrefill = lead;
   const apply = () => applyCBGLeadPrefill(lead);
   if (document.readyState === 'loading') {
@@ -11292,7 +11293,25 @@ window.addEventListener('load', () => { setTimeout(gcalInit, 300); });
   } else {
     setTimeout(apply, 200);
   }
-})();
+  return true;
+}
+window.cbgRunPrefillFromHash = cbgRunPrefillFromHash;
+
+// Run on initial load
+cbgRunPrefillFromHash();
+
+// Re-run on every hashchange so a second extension submit into the same tab
+// also gets processed. Without this, the URL changes from `/` to
+// `/#prefill=...` but the IIFE only ran once → second lead never showed up.
+window.addEventListener('hashchange', () => {
+  // Reset the per-lead state so the new lead's classification + banner
+  // replace the old one cleanly
+  const oldBanner = document.getElementById('cbgPrefillBanner');
+  if (oldBanner) oldBanner.remove();
+  const oldReview = document.getElementById('cbgLeadReviewModal');
+  if (oldReview) oldReview.remove();
+  cbgRunPrefillFromHash();
+});
 
 function applyCBGLeadPrefill(lead) {
   if (!lead) return;
