@@ -11588,8 +11588,14 @@ async function cbgReviewSubmit(opts) {
   if (pushToRingy) {
     tasks.push((async () => {
       try {
-        await sendLeadToRingy(record);
-        if (typeof showToast === 'function') showToast('Sent to Ringy.', 'success');
+        const result = await sendLeadToRingy(record);
+        if (typeof showToast === 'function') {
+          if (result && result.mode === 'no-cors') {
+            showToast('Sent to Ringy (verify in Ringy — browser cannot read response).', 'success');
+          } else {
+            showToast('Sent to Ringy.', 'success');
+          }
+        }
       } catch (e) { errors.push('Ringy: ' + (e.message || e)); }
     })());
   }
@@ -12005,17 +12011,76 @@ async function sendLeadToRingy(lead) {
   if (lead.notes) noteParts.push(lead.notes);
   if (noteParts.length) params.append('notes', noteParts.join(' · '));
 
-  const res = await fetch('https://app.ringy.com/api/public/leads/new-lead', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-    body: params.toString()
-  });
-  // Ringy may return JSON or plain text — try both
-  const txt = await res.text();
-  let data = null;
-  try { data = JSON.parse(txt); } catch (_) { data = { raw: txt }; }
-  if (!res.ok) throw new Error(`Ringy ${res.status}: ${(data && (data.error || data.message)) || txt.slice(0, 200)}`);
-  return data;
+  // Strategy 1 — Supabase Edge Function proxy. Returns real success/failure.
+  // Reuses the same Supabase project the CRM is already pointed at.
+  // Function name is configurable (default 'ringy-proxy') so it works with
+  // whatever name was used on deploy (e.g., the Supabase auto-generated names).
+  const sbSettings = (typeof loadCRMSettings === 'function') ? loadCRMSettings() : null;
+  const sbUrl = (sbSettings && sbSettings.url) || (typeof CRM_DEFAULTS !== 'undefined' ? CRM_DEFAULTS.url : '');
+  const fnName = (cfg.fnName || 'ringy-proxy').replace(/[^a-z0-9_-]/gi, '');
+  if (sbUrl) {
+    const proxyUrl = sbUrl.replace(/\/$/, '') + '/functions/v1/' + fnName;
+    const proxyBody = { sid: cfg.sid, authToken: cfg.authToken, phone_number: phoneDigits };
+    if (lead.firstName) proxyBody.first_name = lead.firstName;
+    if (lead.lastName)  proxyBody.last_name  = lead.lastName;
+    if (lead.email)     proxyBody.email      = lead.email;
+    if (lead.state)     proxyBody.state      = lead.state;
+    if (lead.address)   proxyBody.address    = lead.address;
+    if (lead.city)      proxyBody.city       = lead.city;
+    if (lead.zip)       proxyBody.zip        = lead.zip;
+    if (lead.dob)       proxyBody.dob        = lead.dob;
+    const noteParts = [];
+    if (lead.income) noteParts.push(`Income: $${Number(lead.income).toLocaleString()}`);
+    if (lead.householdSize) noteParts.push(`HH: ${lead.householdSize}`);
+    if (lead.leadSource) noteParts.push(`Source: ${lead.leadSource}`);
+    if (lead.notes) noteParts.push(lead.notes);
+    if (noteParts.length) proxyBody.notes = noteParts.join(' · ');
+
+    try {
+      const sbKey = (sbSettings && sbSettings.key) || (typeof CRM_DEFAULTS !== 'undefined' ? CRM_DEFAULTS.key : '');
+      const headers = { 'Content-Type': 'application/json' };
+      if (sbKey) { headers['apikey'] = sbKey; headers['Authorization'] = 'Bearer ' + sbKey; }
+      const res = await fetch(proxyUrl, { method: 'POST', headers, body: JSON.stringify(proxyBody) });
+      const data = await res.json();
+      // Edge function returns 404 if not deployed yet — fall through to direct attempt
+      if (res.status === 404) throw new Error('proxy-not-deployed');
+      if (!res.ok || (data && data.ok === false)) {
+        const inner = data && data.data;
+        const msg = (inner && (inner.error || inner.message)) || data.error || `status ${res.status}`;
+        throw new Error('Ringy rejected: ' + msg);
+      }
+      return { ok: true, data, mode: 'edge-function' };
+    } catch (err) {
+      // If the proxy isn't deployed yet, fall through to the direct attempt.
+      // For a real Ringy validation error, re-throw so the user sees it.
+      if (!/proxy-not-deployed|Failed to fetch|NetworkError|TypeError/i.test(err.message || '')) throw err;
+    }
+  }
+
+  // Strategy 2 — direct CORS fetch. Works if Ringy ever enables CORS for us.
+  try {
+    const res = await fetch('https://app.ringy.com/api/public/leads/new-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body: params.toString()
+    });
+    const txt = await res.text();
+    let data = null;
+    try { data = JSON.parse(txt); } catch (_) { data = { raw: txt }; }
+    if (!res.ok) throw new Error(`Ringy ${res.status}: ${(data && (data.error || data.message)) || txt.slice(0, 200)}`);
+    return { ok: true, data, mode: 'cors' };
+  } catch (err) {
+    // Strategy 3 — no-cors fire-and-forget fallback.
+    const isCorsLike = /Failed to fetch|NetworkError|TypeError|CORS/i.test(err.message || '');
+    if (!isCorsLike) throw err;
+    await fetch('https://app.ringy.com/api/public/leads/new-lead', {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    return { ok: true, data: null, mode: 'no-cors', warning: 'Sent fire-and-forget — verify in Ringy' };
+  }
 }
 window.sendLeadToRingy = sendLeadToRingy;
 
@@ -12042,6 +12107,11 @@ function openRingySettings() {
         <span style="font-size:11px;color:var(--text-3);font-weight:500;letter-spacing:0.01em">Auth Token</span>
         <input id="ringyInput_token" type="text" placeholder="${tokVal ? 'Current: ' + masked(tokVal) : 'Paste your Ringy Auth Token'}" style="width:100%;background:var(--bg-surface-2,rgba(255,255,255,0.04));border:0.5px solid rgba(248,249,250,0.12);border-radius:7px;padding:10px 12px;color:var(--text-1);font-size:13px;font-family:inherit;box-sizing:border-box;outline:none" />
       </label>
+      <label style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
+        <span style="font-size:11px;color:var(--text-3);font-weight:500;letter-spacing:0.01em">Edge Function name (advanced)</span>
+        <input id="ringyInput_fnName" type="text" value="${cfg.fnName || 'ringy-proxy'}" placeholder="ringy-proxy" style="width:100%;background:var(--bg-surface-2,rgba(255,255,255,0.04));border:0.5px solid rgba(248,249,250,0.12);border-radius:7px;padding:10px 12px;color:var(--text-1);font-size:13px;font-family:inherit;box-sizing:border-box;outline:none" />
+        <span style="font-size:11px;color:var(--text-3);line-height:1.4">The Supabase Edge Function name that proxies to Ringy. Set this if you deployed under a different name (e.g. <code style="color:var(--accent-action)">rapid-service</code>).</span>
+      </label>
 
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap">
         ${(sidVal || tokVal) ? '<button id="ringyClearBtn" style="background:transparent;color:#fca5a5;border:0.5px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;font-family:inherit">Remove credentials</button>' : ''}
@@ -12057,7 +12127,8 @@ function openRingySettings() {
   document.getElementById('ringySaveBtn').onclick = () => {
     const newSid = document.getElementById('ringyInput_sid').value.trim() || sidVal;
     const newTok = document.getElementById('ringyInput_token').value.trim() || tokVal;
-    setRingyConfig({ sid: newSid, authToken: newTok });
+    const newFn  = (document.getElementById('ringyInput_fnName').value.trim()) || 'ringy-proxy';
+    setRingyConfig({ sid: newSid, authToken: newTok, fnName: newFn });
     if (typeof showToast === 'function') showToast('Ringy credentials saved.', 'success');
     close();
   };
