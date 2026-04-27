@@ -669,6 +669,227 @@
   @keyframes slideUp { from { transform: translateY(20px) scale(0.97); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
   /* ============================================================
+     2026 DESIGN TOKENS — modern, efficient, low-chrome.
+     Coexists with the legacy --yellow / --muted vars so older
+     surfaces still render. New surfaces opt in via .kpi-card etc.
+     ============================================================ */
+  :root {
+    /* 3-level surface system (vs legacy single .card bg) */
+    --bg-surface-0: #0A0E1A;                       /* page (matches --navy) */
+    --bg-surface-1: rgba(255,255,255,0.025);       /* default cards */
+    --bg-surface-2: rgba(255,255,255,0.05);        /* hover / raised */
+    --bg-surface-3: rgba(255,255,255,0.08);        /* drawer, modals */
+
+    /* Borders by purpose */
+    --border-subtle:  rgba(255,255,255,0.05);
+    --border-default: rgba(255,255,255,0.09);
+    --border-strong:  rgba(255,255,255,0.16);
+
+    /* Text hierarchy by opacity (vs hard-coded muted color) */
+    --text-1: rgba(248,249,250,0.95);              /* primary */
+    --text-2: rgba(248,249,250,0.65);              /* secondary */
+    --text-3: rgba(248,249,250,0.42);              /* tertiary, hints */
+
+    /* Accents — yellow reserved for actions/headlines, blue for info */
+    --accent-action: #FDC72F;
+    --accent-action-bg: rgba(253,199,47,0.07);
+    --accent-action-border: rgba(253,199,47,0.25);
+    --accent-info: #60A5FA;
+    --accent-info-bg: rgba(96,165,250,0.08);
+    --accent-info-border: rgba(96,165,250,0.25);
+
+    /* Refined statuses (replace legacy --success / --error which stay for back-compat) */
+    --status-positive: #34D399;
+    --status-positive-bg: rgba(52,211,153,0.08);
+    --status-negative: #F87171;
+    --status-negative-bg: rgba(248,113,113,0.08);
+    --status-neutral:  rgba(255,255,255,0.5);
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+
+    /* Radius scale */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-pill: 999px;
+
+    /* Type scale */
+    --fs-micro: 11px;
+    --fs-caption: 12px;
+    --fs-body-sm: 13px;
+    --fs-body: 14px;
+    --fs-h3: 18px;
+    --fs-h2: 24px;
+    --fs-h1: 28px;
+    --fs-display: 32px;
+  }
+
+  /* ============================================================
+     MODAL FIELD REFRESH — scoped to specific modals so the quote
+     tool's loud forms stay untouched.
+     ============================================================ */
+  #dealDetailBody .label,
+  #policyModalBody .label,
+  #taskModalBody .label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-3);
+    letter-spacing: 0;
+    text-transform: none;
+    margin-bottom: 6px;
+  }
+  #dealDetailBody .input,
+  #policyModalBody .input,
+  #taskModalBody .input {
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    padding: 9px 12px;
+    border-color: var(--border-default);
+    background: var(--bg-surface-2);
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  #dealDetailBody .input:hover,
+  #policyModalBody .input:hover,
+  #taskModalBody .input:hover {
+    border-color: var(--border-strong);
+  }
+  #dealDetailBody .input:focus,
+  #policyModalBody .input:focus,
+  #taskModalBody .input:focus {
+    border-color: var(--accent-info);
+    background: var(--bg-surface-3);
+  }
+  #dealDetailBody .field,
+  #policyModalBody .field,
+  #taskModalBody .field {
+    margin-bottom: var(--space-3);
+  }
+
+  /* ============================================================
+     KPI CARD — new headline-metric pattern
+     Replaces the legacy .card with inline-style top KPI rows.
+     ============================================================ */
+  .kpi-card {
+    background: var(--bg-surface-1);
+    border: 0.5px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    margin-bottom: 0;
+  }
+  .kpi-card:hover {
+    background: var(--bg-surface-2);
+    border-color: var(--border-default);
+  }
+  .kpi-card.is-featured {
+    background: var(--accent-action-bg);
+    border-color: var(--accent-action-border);
+  }
+  .kpi-card.is-info {
+    background: var(--accent-info-bg);
+    border-color: var(--accent-info-border);
+  }
+  .kpi-card__label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-micro);
+    color: var(--text-3);
+    margin-bottom: var(--space-3);
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  .kpi-card__dot {
+    width: 6px; height: 6px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-action);
+    flex-shrink: 0;
+  }
+  .kpi-card.is-info .kpi-card__dot { background: var(--accent-info); }
+  .kpi-card.is-positive .kpi-card__dot { background: var(--status-positive); }
+  .kpi-card__value {
+    font-family: 'DM Sans', sans-serif;
+    font-size: var(--fs-h1);
+    font-weight: 500;
+    color: var(--text-1);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .kpi-card__value.is-yellow   { color: var(--accent-action); }
+  .kpi-card__value.is-positive { color: var(--status-positive); }
+  .kpi-card__value.is-negative { color: var(--status-negative); }
+  .kpi-card__value-suffix {
+    font-size: var(--fs-body-sm);
+    font-weight: 400;
+    color: var(--text-3);
+    margin-left: 2px;
+    letter-spacing: 0;
+  }
+  .kpi-card__detail {
+    font-size: var(--fs-micro);
+    color: var(--text-3);
+    margin-top: var(--space-2);
+    line-height: 1.45;
+  }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  /* ============================================================
+     PILLS, STATS, SECTION HEADERS — supporting parts
+     ============================================================ */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    font-size: 10.5px;
+    font-weight: 500;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-2);
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+  }
+  .pill.is-positive { background: var(--status-positive-bg); color: var(--status-positive); }
+  .pill.is-negative { background: var(--status-negative-bg); color: var(--status-negative); }
+  .pill.is-yellow   { background: var(--accent-action-bg); color: var(--accent-action); }
+  .pill.is-info     { background: var(--accent-info-bg); color: var(--accent-info); }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-3);
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .section-header__title {
+    font-size: var(--fs-h3);
+    font-weight: 500;
+    color: var(--text-1);
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .section-header__sub {
+    font-size: var(--fs-caption);
+    color: var(--text-3);
+  }
+
+  /* ============================================================
      UTILITY CLASSES — replace common inline-style patterns
      ============================================================ */
   .label-mini { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
@@ -1071,6 +1292,29 @@
   }
   .settings-gear:hover { border-color: var(--yellow-dark); color: var(--yellow); }
 
+  /* CRM tab strip — quieter active state (replaces loud solid-yellow background) */
+  .crm-tab-strip .settings-gear {
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-3);
+    font-weight: 400;
+    padding: 7px 13px;
+  }
+  .crm-tab-strip .settings-gear:hover {
+    color: var(--text-1);
+    background: var(--bg-surface-2);
+    border-color: var(--border-subtle);
+  }
+  .crm-tab-strip .settings-gear.is-active {
+    color: var(--accent-action);
+    background: var(--accent-action-bg);
+    border-color: var(--accent-action-border);
+    font-weight: 500;
+  }
+  .crm-tab-strip .settings-gear.is-active:hover {
+    background: rgba(253,199,47,0.12);
+  }
+
   .crm-status-pill {
     font-size: 10px;
     font-weight: 700;
@@ -1092,8 +1336,9 @@
   .crm-deal-card { transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s; }
   .crm-deal-card:hover { transform: translateY(-1px); box-shadow: 0 2px 10px rgba(0,0,0,0.25); border-color: rgba(253,199,47,0.4); }
   .crm-deal-card.dragging { opacity: 0.35; }
-  .crm-stage-col { transition: background 0.15s, border-color 0.15s; }
-  .crm-stage-col.drop-target { background: rgba(253,199,47,0.08); border-color: var(--yellow); }
+  .crm-stage-col { transition: background 0.15s, border-color 0.15s, transform 0.15s; }
+  .crm-stage-col.drop-target { background: var(--accent-info-bg); border-color: var(--accent-info); transform: scale(1.01); }
+  .crm-deal-card.dragging { opacity: 0.5; transform: rotate(-1deg); }
 
   /* Toast */
   .toast {
@@ -1618,9 +1863,9 @@
         <label class="label">Password</label>
         <input class="input" id="crmPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
       </div>
-      <div id="crmLoginError" style="display:none;color:var(--error);font-size:12.5px;margin-top:6px"></div>
-      <div class="modal-note" style="margin-top:14px;font-size:12px">
-        First time here? Check your email for the Supabase invitation — clicking it lets you set your password. Then come back and sign in.
+      <div id="crmLoginError" style="display:none;color:var(--status-negative);font-size:12.5px;margin-top:6px"></div>
+      <div style="margin-top:var(--space-3);padding:10px 14px;background:var(--bg-surface-1);border:0.5px solid var(--border-subtle);border-radius:var(--radius-md);font-size:12px;line-height:1.5;color:var(--text-3)">
+        <strong style="color:var(--text-2);font-weight:500">First time here?</strong> Check your email for the Supabase invitation — clicking it lets you set your password. Then come back and sign in.
       </div>
     </div>
     <div class="modal-footer">
@@ -1651,8 +1896,8 @@
         <label class="label">Confirm New Password</label>
         <input class="input" id="crmNewPasswordConfirm" type="password" placeholder="retype the same password" autocomplete="new-password" />
       </div>
-      <div id="crmChangePasswordError" style="display:none;color:var(--error);font-size:12.5px;margin-top:6px"></div>
-      <div class="modal-note" style="margin-top:14px;font-size:12px">
+      <div id="crmChangePasswordError" style="display:none;color:var(--status-negative);font-size:12.5px;margin-top:6px"></div>
+      <div style="margin-top:var(--space-3);padding:10px 14px;background:var(--bg-surface-1);border:0.5px solid var(--border-subtle);border-radius:var(--radius-md);font-size:12px;line-height:1.5;color:var(--text-3)">
         Password is hashed by Supabase before it hits the database — this app never stores it.
       </div>
     </div>
@@ -1675,8 +1920,8 @@
       <button class="modal-close" onclick="closeCRMImport()">×</button>
     </div>
     <div class="modal-body">
-      <div class="modal-note" style="margin-top:0;margin-bottom:16px;background:rgba(109,208,245,0.06);border-color:rgba(109,208,245,0.22);color:#c0d8e8">
-        <strong style="color:#6dd0f5">How it works:</strong> Upload a CSV. Each row becomes a contact + a deal in the pipeline you pick below. You can also add <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;font-size:12px">pipeline</code> and <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;font-size:12px">stage</code> columns to override the defaults per row — handy when one file mixes Leads, Clients, and Referrals.
+      <div style="margin-top:0;margin-bottom:var(--space-4);padding:12px 14px;background:var(--accent-info-bg);border:0.5px solid var(--accent-info-border);border-radius:var(--radius-md);font-size:12.5px;color:var(--text-2);line-height:1.5">
+        <strong style="color:var(--accent-info);font-weight:500">How it works:</strong> Upload a CSV. Each row becomes a contact + a deal in the pipeline you pick below. Add <code style="background:var(--bg-surface-3);padding:1px 5px;border-radius:3px;font-size:11.5px">pipeline</code> and <code style="background:var(--bg-surface-3);padding:1px 5px;border-radius:3px;font-size:11.5px">stage</code> columns to override the defaults per row — handy when one file mixes Leads, Clients, and Referrals.
       </div>
 
       <div class="save-grid-2" style="margin-bottom:14px">
@@ -1693,10 +1938,10 @@
       <div class="field">
         <label class="label">CSV File</label>
         <input class="input" id="crmImportFile" type="file" accept=".csv,text/csv" style="padding:10px 12px" />
-        <div style="margin-top:8px;font-size:12px;color:var(--muted)">
-          <a href="#" id="crmImportTemplateLink" onclick="downloadCRMImportTemplate(event)" style="color:var(--yellow);text-decoration:underline;cursor:pointer">Download CSV template</a>
-          &nbsp;·&nbsp; Expected columns: <code style="background:rgba(0,0,0,0.25);padding:1px 4px;border-radius:3px">first_name, last_name, email, phone, dob, address, city, state, zip, annual_income, pipeline, stage, notes, received_on, lead_source</code><br>
-          &nbsp;·&nbsp; <strong style="color:var(--yellow)">Smart parsing:</strong> Notes are scanned for &ldquo;VSoft / Next Gen / Tusha&rdquo; (auto-tags lead source), &ldquo;INCOME: $X&rdquo;, &ldquo;QUOTED: $X&rdquo;, and USHA product names. Existing column values always win.
+        <div style="margin-top:8px;font-size:12px;color:var(--text-3);line-height:1.5">
+          <a href="#" id="crmImportTemplateLink" onclick="downloadCRMImportTemplate(event)" style="color:var(--accent-action);text-decoration:none;cursor:pointer;border-bottom:0.5px solid var(--accent-action-border)">Download CSV template</a>
+          &nbsp;·&nbsp; Columns: <code style="background:var(--bg-surface-3);padding:1px 4px;border-radius:3px;font-size:11.5px">first_name, last_name, email, phone, dob, address, city, state, zip, annual_income, pipeline, stage, notes, received_on, lead_source</code><br>
+          &nbsp;·&nbsp; <strong style="color:var(--text-2);font-weight:500">Smart parsing:</strong> Notes are scanned for &ldquo;VSoft / Next Gen / Tusha&rdquo; (auto-tags lead source), &ldquo;INCOME: $X&rdquo;, &ldquo;QUOTED: $X&rdquo;, and USHA product names. Existing column values always win.
         </div>
       </div>
 
@@ -1718,59 +1963,59 @@
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
       <div>
-        <div class="modal-title">⚙ Settings</div>
-        <div class="modal-sub">Connections, account, and tools — all in one place</div>
+        <div class="modal-title">Settings</div>
+        <div class="modal-sub">Connections, account &amp; tools</div>
       </div>
       <button class="modal-close" onclick="closeSettingsModalV2()">×</button>
     </div>
     <div class="modal-body">
       <!-- Google connection -->
-      <div style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="padding:14px 16px;border:0.5px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:var(--space-2);background:var(--bg-surface-1);transition:background 0.15s,border-color 0.15s" onmouseover="this.style.background='var(--bg-surface-2)'" onmouseout="this.style.background='var(--bg-surface-1)'">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
           <div style="flex:1;min-width:200px">
-            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">Google (Calendar + Gmail)</div>
-            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">Sync tasks to Google Calendar and read Gmail threads inside Deal Detail. <span id="settingsV2_gcalState">—</span></div>
+            <div style="font-size:14px;font-weight:500;color:var(--text-1);margin-bottom:2px;letter-spacing:-0.005em">Google · Calendar + Gmail</div>
+            <div style="font-size:12px;color:var(--text-3);line-height:1.45">Sync tasks to Calendar &amp; read Gmail threads in Deal Detail · <span id="settingsV2_gcalState">—</span></div>
           </div>
-          <button class="btn-ghost" id="settingsV2_gcalBtn" onclick="gcalToggleConnection(); setTimeout(refreshSettingsModalV2State, 400)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0">—</button>
+          <button class="btn-ghost" id="settingsV2_gcalBtn" onclick="gcalToggleConnection(); setTimeout(refreshSettingsModalV2State, 400)" style="padding:7px 14px;font-size:12px;width:auto;margin:0;flex-shrink:0">—</button>
         </div>
       </div>
 
       <!-- Supabase / CRM database connection -->
-      <div style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="padding:14px 16px;border:0.5px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:var(--space-2);background:var(--bg-surface-1);transition:background 0.15s,border-color 0.15s" onmouseover="this.style.background='var(--bg-surface-2)'" onmouseout="this.style.background='var(--bg-surface-1)'">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
           <div style="flex:1;min-width:200px">
-            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">CRM Database (Supabase)</div>
-            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">Where contacts, deals, tasks, and policies are stored. <span id="settingsV2_dbState">—</span></div>
+            <div style="font-size:14px;font-weight:500;color:var(--text-1);margin-bottom:2px;letter-spacing:-0.005em">CRM database · Supabase</div>
+            <div style="font-size:12px;color:var(--text-3);line-height:1.45">Where contacts, deals, tasks &amp; policies are stored · <span id="settingsV2_dbState">—</span></div>
           </div>
-          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(openCRMSettings, 50)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0">Configure</button>
+          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(openCRMSettings, 50)" style="padding:7px 14px;font-size:12px;width:auto;margin:0;flex-shrink:0">Configure</button>
         </div>
       </div>
 
       <!-- Change password -->
-      <div style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="padding:14px 16px;border:0.5px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:var(--space-2);background:var(--bg-surface-1);transition:background 0.15s,border-color 0.15s" onmouseover="this.style.background='var(--bg-surface-2)'" onmouseout="this.style.background='var(--bg-surface-1)'">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
           <div style="flex:1;min-width:200px">
-            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">Account password</div>
-            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">Update the password you use to sign in to the CRM.</div>
+            <div style="font-size:14px;font-weight:500;color:var(--text-1);margin-bottom:2px;letter-spacing:-0.005em">Account password</div>
+            <div style="font-size:12px;color:var(--text-3);line-height:1.45">Update the password you use to sign in to the CRM.</div>
           </div>
-          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(openCRMChangePassword, 50)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0">Change</button>
+          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(openCRMChangePassword, 50)" style="padding:7px 14px;font-size:12px;width:auto;margin:0;flex-shrink:0">Change</button>
         </div>
       </div>
 
       <!-- Sign out -->
-      <div style="padding:12px 14px;border:1px solid rgba(239,68,68,0.25);border-radius:10px;margin-bottom:12px;background:rgba(239,68,68,0.04)">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="padding:14px 16px;border:0.5px solid var(--status-negative-bg);border-radius:var(--radius-lg);margin-bottom:var(--space-3);background:var(--status-negative-bg);transition:background 0.15s,border-color 0.15s">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
           <div style="flex:1;min-width:200px">
-            <div style="font-size:13.5px;font-weight:600;color:var(--white);margin-bottom:3px">Sign out</div>
-            <div style="font-size:11.5px;color:var(--muted);line-height:1.45">End your CRM session. You'll need to sign back in to access your data.</div>
+            <div style="font-size:14px;font-weight:500;color:var(--text-1);margin-bottom:2px;letter-spacing:-0.005em">Sign out</div>
+            <div style="font-size:12px;color:var(--text-3);line-height:1.45">End your CRM session. You'll need to sign back in to access your data.</div>
           </div>
-          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(crmSignOut, 50)" style="padding:7px 12px;font-size:12px;width:auto;margin:0;flex-shrink:0;color:var(--error);border-color:rgba(239,68,68,0.3)">Sign out</button>
+          <button class="btn-ghost" onclick="closeSettingsModalV2(); setTimeout(crmSignOut, 50)" style="padding:7px 14px;font-size:12px;width:auto;margin:0;flex-shrink:0;color:var(--status-negative);border-color:rgba(248,113,113,0.3)">Sign out</button>
         </div>
       </div>
 
       <!-- Quick reference -->
-      <div class="modal-note" style="margin-top:8px;font-size:11.5px;line-height:1.5">
-        <div style="margin-bottom:6px"><strong>Tip:</strong> If "Connect Google" returns an error mentioning <code>file://</code>, you opened the HTML locally instead of via the live URL. Always test on <code>coveredbygreco-hub.github.io/quote-tool/</code>.</div>
+      <div class="modal-note" style="margin-top:var(--space-3);font-size:12px;line-height:1.5;color:var(--text-3);background:var(--bg-surface-1);border:0.5px solid var(--border-subtle);padding:10px 14px;border-radius:var(--radius-md)">
+        <strong style="color:var(--text-2);font-weight:500">Heads up:</strong> If "Connect Google" returns an error mentioning <code style="background:var(--bg-surface-3);padding:1px 4px;border-radius:3px;font-size:11px">file://</code>, you opened the HTML locally instead of via the live URL. Always test on the deployed URL.
       </div>
     </div>
     <div class="modal-footer">
@@ -1791,7 +2036,7 @@
       <button class="modal-close" onclick="closeCRM()">×</button>
     </div>
     <div class="saved-leads-head-row crm-tab-strip" style="flex-wrap:wrap;gap:8px">
-      <button class="settings-gear" id="crmTabDashboard" onclick="showCRMTab('dashboard')" style="background:var(--yellow);color:var(--navy);font-weight:600">Dashboard</button>
+      <button class="settings-gear is-active" id="crmTabDashboard" onclick="showCRMTab('dashboard')">Dashboard</button>
       <button class="settings-gear" id="crmTabPipelines" onclick="showCRMTab('pipelines')">Tracker</button>
       <button class="settings-gear" id="crmTabTasks" onclick="showCRMTab('tasks')">Tasks <span id="crmTaskBadge" style="display:none;background:var(--error);color:#fff;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
       <button class="settings-gear" id="crmTabRenewals" onclick="showCRMTab('renewals')">Renewals <span id="crmRenewalBadge" style="display:none;background:var(--yellow);color:var(--navy);padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px">0</span></button>
@@ -1854,13 +2099,13 @@
         <div class="modal-sub" id="confirmModalSub">This action cannot be undone.</div>
       </div>
     </div>
-    <div class="modal-body" id="confirmModalBody" style="padding:18px 24px;font-size:14px;line-height:1.5;color:var(--text);">
+    <div class="modal-body" id="confirmModalBody" style="padding:18px 24px;font-size:14px;line-height:1.5;color:var(--text-1);">
       This will permanently delete the data.
     </div>
     <div class="modal-footer">
       <div style="flex:1"></div>
       <button class="btn-ghost" id="confirmModalCancel">Cancel</button>
-      <button class="btn-primary" id="confirmModalOk" style="width:auto;padding:10px 20px;margin-top:0;background:var(--error);color:#fff">Yes, delete</button>
+      <button class="btn-primary" id="confirmModalOk" style="width:auto;padding:10px 20px;margin-top:0;background:var(--status-negative);color:#fff">Yes, delete</button>
     </div>
   </div>
 </div>
@@ -1902,25 +2147,25 @@
         <textarea class="input" id="pol_notes" rows="2" style="resize:vertical;font-family:inherit;padding:8px 12px" placeholder="Copay structure, out-of-pocket max, anything else"></textarea></div>
 
       <!-- Per-product stack (Tier 4 multi-product) -->
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600" id="pol_products_header">Products in this sale</div>
-          <div id="pol_products_help" style="font-size:11px;color:var(--muted)">Pick a Sale Template to pre-load, or stack manually.</div>
+      <div style="margin-top:var(--space-4);padding-top:var(--space-3);border-top:0.5px solid var(--border-subtle)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-2);flex-wrap:wrap;gap:8px">
+          <div style="color:var(--text-1);font-size:13px;font-weight:500;letter-spacing:-0.005em" id="pol_products_header">Products in this sale</div>
+          <div id="pol_products_help" style="font-size:11.5px;color:var(--text-3)">Pick a sale template to pre-load, or stack manually.</div>
         </div>
         <!-- Sale Template picker (Tier 5 Phase 2) — hidden in edit mode, populated by JS -->
-        <div id="pol_template_wrap" style="margin-bottom:10px">
-          <label class="label" style="font-size:11px">⚡ Sale Template (replaces all rows)</label>
+        <div id="pol_template_wrap" style="margin-bottom:var(--space-3)">
+          <label class="label" style="font-size:11px">Sale template — replaces all rows</label>
           <select class="input" id="pol_template_picker" onchange="applyPolicyTemplate(this.value); this.value='';">
             <option value="">— Pick a preset bundle —</option>
           </select>
         </div>
         <div id="pol_products_container"></div>
-        <button class="btn-ghost" id="pol_add_product_btn" style="padding:7px 12px;font-size:12px;width:auto;margin-top:6px;margin-bottom:0" onclick="addPolicyProductRow()">+ Add another product</button>
+        <button class="btn-ghost" id="pol_add_product_btn" style="padding:7px 14px;font-size:12px;width:auto;margin-top:var(--space-2);margin-bottom:0" onclick="addPolicyProductRow()">+ Add another product</button>
       </div>
 
       <!-- Manual commission override (collapsible, applies to ALL products in this sale) -->
-      <details id="pol_commission_section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-        <summary style="cursor:pointer;color:var(--yellow);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;outline:none;user-select:none">Manual commission (non-USHA)</summary>
+      <details id="pol_commission_section" style="margin-top:var(--space-3);border-top:0.5px solid var(--border-subtle);padding-top:var(--space-3)">
+        <summary style="cursor:pointer;color:var(--text-1);font-size:13px;font-weight:500;outline:none;user-select:none;letter-spacing:-0.005em">Manual commission · non-USHA</summary>
         <div style="margin-top:12px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Used only when a product row above doesn't have a USHA Product picked. Applied to every non-USHA product in this sale.</div>
           <div class="save-grid-2" style="gap:10px">
@@ -1951,7 +2196,7 @@
       </details>
 
       <!-- Combined live preview across all rows -->
-      <div id="pol_commission_preview" style="margin-top:14px;padding:12px 14px;background:rgba(253,199,47,0.05);border:1px solid rgba(253,199,47,0.15);border-radius:8px;font-size:12px;color:var(--muted);display:none"></div>
+      <div id="pol_commission_preview" style="margin-top:var(--space-3);padding:12px 14px;background:var(--accent-action-bg);border:0.5px solid var(--accent-action-border);border-radius:var(--radius-md);font-size:12px;color:var(--text-2);display:none"></div>
 
       <div id="pol_error" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
     </div>
@@ -1997,11 +2242,11 @@
       <div class="field" style="margin-top:10px;margin-bottom:0"><label class="label">Notes (optional)</label>
         <textarea class="input" id="task_description" rows="3" style="resize:vertical;min-height:70px;font-family:inherit;padding:10px 12px" placeholder="Anything else to remember about this task…"></textarea>
       </div>
-      <div style="margin-top:12px;padding:10px 12px;background:rgba(253,199,47,0.05);border:1px solid rgba(253,199,47,0.2);border-radius:6px;display:flex;align-items:center;gap:8px">
-        <input type="checkbox" id="task_gcal" checked style="accent-color:var(--yellow);cursor:pointer" />
-        <label for="task_gcal" style="flex:1;font-size:12.5px;color:var(--text);cursor:pointer">
-          <strong style="color:var(--white)">Sync to Google Calendar</strong>
-          <span id="task_gcal_sub" style="display:block;font-size:11px;color:var(--muted);margin-top:1px">Will create, update, and delete the event automatically. Click <em>Connect Calendar</em> in the CRM header if you haven't yet.</span>
+      <div style="margin-top:var(--space-3);padding:12px 14px;background:var(--accent-action-bg);border:0.5px solid var(--accent-action-border);border-radius:var(--radius-md);display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="task_gcal" checked style="accent-color:var(--accent-action);cursor:pointer;width:14px;height:14px" />
+        <label for="task_gcal" style="flex:1;font-size:13px;color:var(--text-2);cursor:pointer;line-height:1.4">
+          <strong style="color:var(--text-1);font-weight:500">Sync to Google Calendar</strong>
+          <span id="task_gcal_sub" style="display:block;font-size:11.5px;color:var(--text-3);margin-top:2px">Auto-creates, updates, and deletes the event. Connect Google in <strong>Settings</strong> if you haven't yet.</span>
         </label>
       </div>
       <div id="taskModalError" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
@@ -4730,21 +4975,21 @@ function openEmailTemplatesForDeal(dealId) {
       <div class="modal" style="max-width:820px">
         <div class="modal-header">
           <div>
-            <div class="modal-title">Send email — pick a template</div>
+            <div class="modal-title">Send email · pick a template</div>
             <div class="modal-sub" id="emailTplSub">Variables auto-fill from the contact</div>
           </div>
           <button class="modal-close" onclick="closeEmailTemplates()">×</button>
         </div>
         <div class="modal-body" style="padding:0">
           <div style="display:grid;grid-template-columns:280px 1fr;min-height:400px">
-            <div style="border-right:1px solid var(--border);padding:14px;overflow-y:auto;max-height:60vh" id="emailTplList"></div>
-            <div style="padding:14px;overflow-y:auto;max-height:60vh" id="emailTplPreview">
-              <div style="font-size:12.5px;color:var(--muted);text-align:center;padding:30px 10px">Pick a template on the left to preview.</div>
+            <div style="border-right:0.5px solid var(--border-subtle);padding:14px;overflow-y:auto;max-height:60vh;background:var(--bg-surface-1)" id="emailTplList"></div>
+            <div style="padding:18px;overflow-y:auto;max-height:60vh" id="emailTplPreview">
+              <div style="font-size:12.5px;color:var(--text-3);text-align:center;padding:30px 10px">Pick a template on the left to preview.</div>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <div style="flex:1;font-size:11px;color:var(--muted)">Opens in your Gmail tab — review before sending.</div>
+          <div style="flex:1;font-size:11.5px;color:var(--text-3)">Opens in your Gmail tab — review before sending.</div>
           <button class="btn-ghost" onclick="closeEmailTemplates()">Cancel</button>
           <button class="btn-primary" id="emailTplSendBtn" disabled
                   style="width:auto;padding:10px 20px;margin-top:0;opacity:0.5"
@@ -5788,9 +6033,12 @@ function showCRMTab(tab) {
   tabs.forEach(t => {
     const el = document.getElementById(btnIds[t]);
     if (!el) return;
-    el.style.background = tab === t ? 'var(--yellow)' : '';
-    el.style.color      = tab === t ? 'var(--navy)'  : '';
-    el.style.fontWeight = tab === t ? '600' : '';
+    // Use the .is-active class (CSS handles bg/color/border) — clear any
+    // inline-style remnants from the legacy showCRMTab implementation.
+    el.classList.toggle('is-active', tab === t);
+    el.style.background = '';
+    el.style.color      = '';
+    el.style.fontWeight = '';
   });
   const body = document.getElementById('crmWorkspaceBody');
   // Tab freshness check — skip the loadCRMData roundtrip when data was just fetched.
@@ -5858,9 +6106,9 @@ function renderCRMDashboard() {
   const pipelineRows = crmPipelines.map(p => {
     const count = crmDeals.filter(d => d.pipeline_id === p.id).length;
     return `
-      <tr>
-        <td style="padding:8px 10px">${escapeHTML(p.name)}</td>
-        <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${count}</td>
+      <tr style="border-bottom:0.5px solid var(--border-subtle);transition:background 0.1s" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+        <td style="padding:10px;color:var(--text-1)">${escapeHTML(p.name)}</td>
+        <td style="padding:10px;text-align:right;color:var(--accent-action);font-weight:500">${count}</td>
       </tr>`;
   }).join('');
 
@@ -5882,59 +6130,59 @@ function renderCRMDashboard() {
   body.innerHTML = `
     <div style="padding:20px">
       ${renderOEPBanner()}
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px">
-        <div class="card" style="margin-bottom:0;cursor:pointer" onclick="showCRMTab('tasks')">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Overdue Tasks</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${overdueCount ? 'var(--error)' : 'var(--muted)'}">${overdueCount}</div>
+      <div class="kpi-row" style="margin-bottom:var(--space-3)">
+        <div class="kpi-card" style="cursor:pointer" onclick="showCRMTab('tasks')">
+          <div class="kpi-card__label">Overdue tasks</div>
+          <div class="kpi-card__value ${overdueCount ? 'is-negative' : ''}">${overdueCount}</div>
         </div>
-        <div class="card" style="margin-bottom:0;cursor:pointer" onclick="showCRMTab('tasks')">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Due Today</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${todayCount ? 'var(--yellow)' : 'var(--muted)'}">${todayCount}</div>
+        <div class="kpi-card" style="cursor:pointer" onclick="showCRMTab('tasks')">
+          <div class="kpi-card__label">Due today</div>
+          <div class="kpi-card__value ${todayCount ? 'is-yellow' : ''}">${todayCount}</div>
         </div>
-        <div class="card" style="margin-bottom:0;cursor:pointer" onclick="showCRMTab('tasks')">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">This Week</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:var(--white)">${weekCount}</div>
+        <div class="kpi-card" style="cursor:pointer" onclick="showCRMTab('tasks')">
+          <div class="kpi-card__label">This week</div>
+          <div class="kpi-card__value">${weekCount}</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Renewals (60 d)</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${renewalsSoon ? 'var(--yellow)' : 'var(--muted)'}">${renewalsSoon}</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px">
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Open Deals</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:var(--yellow)">${openDeals}</div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Won / Sold</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:var(--success)">${wonDeals}</div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Contacts</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:var(--yellow)">${totalContacts}</div>
-        </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Total Deals</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:var(--muted)">${totalDeals}</div>
+        <div class="kpi-card" style="cursor:pointer" onclick="showCRMTab('renewals')">
+          <div class="kpi-card__label">Renewals · 60d</div>
+          <div class="kpi-card__value ${renewalsSoon ? 'is-yellow' : ''}">${renewalsSoon}</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:0;align-items:start">
+      <div class="kpi-row" style="margin-bottom:var(--space-6)">
+        <div class="kpi-card">
+          <div class="kpi-card__label">Open deals</div>
+          <div class="kpi-card__value is-yellow">${openDeals}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">Won / sold</div>
+          <div class="kpi-card__value is-positive">${wonDeals}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">Contacts</div>
+          <div class="kpi-card__value">${totalContacts}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">Total deals</div>
+          <div class="kpi-card__value">${totalDeals}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:0;align-items:start">
         ${pipCount ? `
-        <div class="card" style="margin-bottom:0">
-          <div class="card-title" style="margin-bottom:12px">Deals by Pipeline</div>
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <div class="card" style="margin-bottom:0;background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+          <div class="section-header"><div class="section-header__title">Deals by pipeline</div></div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;margin-top:var(--space-2)">
             <thead>
-              <tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Pipeline</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Deals</th>
+              <tr style="border-bottom:0.5px solid var(--border-subtle)">
+                <th style="text-align:left;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Pipeline</th>
+                <th style="text-align:right;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Deals</th>
               </tr>
             </thead>
             <tbody>${pipelineRows}</tbody>
           </table>
         </div>` : '<div></div>'}
-        <div class="card" style="margin-bottom:0">
-          <div class="card-title" style="margin-bottom:12px">🎂 Birthdays this month</div>
-          ${renderBirthdaysThisMonth()}
+        <div class="card" style="margin-bottom:0;background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+          <div class="section-header"><div class="section-header__title">Birthdays this month</div></div>
+          <div style="margin-top:var(--space-2)">${renderBirthdaysThisMonth()}</div>
         </div>
       </div>
       <div style="margin-top:14px">
@@ -5946,23 +6194,31 @@ function renderCRMDashboard() {
 function renderCRMPipelines() {
   const body = document.getElementById('crmWorkspaceBody');
   if (!crmPipelines.length) {
-    body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">No pipelines yet. Seeding should happen automatically on first sign-in — try signing out and back in.</div>';
+    body.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">⚙</div>
+        <div class="empty-state-title">No pipelines yet</div>
+        <div class="empty-state-msg">Seeding should run automatically on first sign-in — try signing out and back in.</div>
+      </div>`;
     return;
   }
-  let html = '<div style="padding:20px;display:flex;flex-direction:column;gap:20px">';
+  let html = '<div style="padding:20px;display:flex;flex-direction:column;gap:var(--space-4)">';
   for (const p of crmPipelines) {
     const pipelineStages = crmStages.filter(s => s.pipeline_id === p.id);
     const pipelineDealCount = crmDeals.filter(d => d.pipeline_id === p.id).length;
     html += `
-      <div class="card" style="margin-bottom:0">
-        <div class="card-title" style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
-          <span>${escapeHTML(p.name)}</span>
-          <span style="font-size:11px;color:var(--muted);font-weight:400;background:rgba(253,199,47,0.08);border:1px solid rgba(253,199,47,0.2);padding:2px 8px;border-radius:10px">${pipelineDealCount} deal${pipelineDealCount === 1 ? '' : 's'}</span>
+      <div class="card" style="margin-bottom:0;background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="section-header__title">${escapeHTML(p.name)}</span>
+            <span class="pill">${pipelineDealCount} deal${pipelineDealCount === 1 ? '' : 's'}</span>
+          </div>
         </div>
-        <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px">
+        <div style="display:flex;gap:var(--space-3);overflow-x:auto;padding-bottom:4px;margin-top:var(--space-3)">
           ${pipelineStages.map(s => {
             const stageDeals = crmDeals.filter(d => d.stage_id === s.id);
-            const stageColor = s.is_won ? 'var(--success)' : s.is_lost ? 'var(--error)' : 'var(--yellow)';
+            const stageColor = s.is_won ? 'var(--status-positive)' : s.is_lost ? 'var(--status-negative)' : 'var(--text-1)';
+            const stageDot = s.is_won ? 'var(--status-positive)' : s.is_lost ? 'var(--status-negative)' : 'var(--accent-action)';
             const cards = stageDeals.map(d => {
               const label = crmContactLabel(d);
               const created = formatDealDate(d.created_at);
@@ -5980,25 +6236,23 @@ function renderCRMPipelines() {
                      ondragend="crmDragEnd(event)"
                      onclick="openDealDetail('${d.id}')"
                      data-deal-id="${d.id}"
-                     style="background:var(--navy);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px;cursor:grab"
+                     style="background:var(--bg-surface-2);border:0.5px solid var(--border-subtle);border-radius:var(--radius-md);padding:10px 12px;margin-top:var(--space-2);cursor:grab;transition:background 0.15s,border-color 0.15s,transform 0.1s"
+                     onmouseover="this.style.background='var(--bg-surface-3)';this.style.borderColor='var(--border-default)'"
+                     onmouseout="this.style.background='var(--bg-surface-2)';this.style.borderColor='var(--border-subtle)'"
                      title="${hasNotes ? 'Has notes — ' + escapeHTML(notesPreview) : 'Drag to another stage, or click to open'}">
-                  <div style="font-size:12.5px;font-weight:600;color:var(--white);margin-bottom:4px;line-height:1.2;display:flex;align-items:flex-start;gap:4px">
-                    <span style="flex:1">${escapeHTML(label)}</span>
-                    ${hasNotes ? '<span style="font-size:11px;color:var(--yellow);line-height:1;margin-top:1px" title="Has notes">📝</span>' : ''}
+                  <div style="font-size:13px;font-weight:500;color:var(--text-1);margin-bottom:${amount || aca ? '6px' : '0'};line-height:1.3;display:flex;align-items:flex-start;gap:6px;letter-spacing:-0.005em">
+                    <span style="flex:1;min-width:0">${escapeHTML(label)}</span>
+                    ${hasNotes ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-action)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' : ''}
                   </div>
-                  ${aca ? `<div style="font-size:10.5px;color:var(--muted);margin-bottom:2px">${escapeHTML(aca)}</div>` : ''}
-                  ${amount ? `<div style="font-size:11px;color:var(--yellow);font-weight:600">${amount}</div>` : ''}
-                  ${hasNotes ? `<div style="font-size:10.5px;color:rgba(253,199,47,0.85);margin-top:4px;line-height:1.35;font-style:italic">"${escapeHTML(notesPreview)}"</div>` : ''}
-                  ${created ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">Added ${escapeHTML(created)}</div>` : ''}
+                  ${amount ? `<div style="font-size:12px;color:var(--accent-action);font-weight:500;font-variant-numeric:tabular-nums">${amount}</div>` : ''}
+                  ${aca ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHTML(aca)}</div>` : ''}
+                  ${hasNotes ? `<div style="font-size:11px;color:var(--text-2);margin-top:6px;line-height:1.4;padding-left:8px;border-left:2px solid var(--accent-action-border)">${escapeHTML(notesPreview)}</div>` : ''}
+                  ${created ? `<div style="font-size:10.5px;color:var(--text-3);margin-top:6px">${escapeHTML(created)}</div>` : ''}
                 </div>`;
             }).join('');
             const countBadge = stageDeals.length > 0
-              ? `<span style="background:${stageColor};color:var(--navy);padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;margin-left:6px">${stageDeals.length}</span>`
+              ? `<span class="pill" style="background:${stageDot};color:var(--bg-surface-0);font-weight:600;padding:1px 7px;font-size:10.5px;margin-left:auto">${stageDeals.length}</span>`
               : '';
-            // Cap each stage column to a fixed height so big stages (e.g. 141
-            // imported clients in "Active Client") don't push every other
-            // pipeline below the fold. The header (name + count + win prob)
-            // stays pinned at top; the cards portion scrolls internally.
             return `
               <div class="crm-stage-col"
                    ondragover="crmDragOver(event)"
@@ -6006,11 +6260,15 @@ function renderCRMPipelines() {
                    ondragleave="crmDragLeave(event)"
                    ondrop="crmDrop(event, '${s.id}', '${p.id}')"
                    data-stage-id="${s.id}" data-pipeline-id="${p.id}"
-                   style="flex:0 0 220px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;max-height:520px;min-height:140px">
-                <div style="font-size:12px;color:${stageColor};font-weight:600;margin-bottom:4px;display:flex;align-items:center">${escapeHTML(s.name)}${countBadge}</div>
-                <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${Math.round((s.probability||0)*100)}% win prob</div>
+                   style="flex:0 0 240px;background:var(--bg-surface-1);border:0.5px solid var(--border-subtle);border-radius:var(--radius-lg);padding:12px;display:flex;flex-direction:column;max-height:540px;min-height:140px">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                  <span style="width:6px;height:6px;border-radius:999px;background:${stageDot};flex-shrink:0"></span>
+                  <span style="font-size:12.5px;color:${stageColor};font-weight:500;letter-spacing:-0.005em">${escapeHTML(s.name)}</span>
+                  ${countBadge}
+                </div>
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">${Math.round((s.probability||0)*100)}% win prob</div>
                 <div style="flex:1;overflow-y:auto;padding-right:4px;margin-right:-4px;-webkit-overflow-scrolling:touch">
-                  ${cards || '<div style="font-size:11px;color:var(--muted);margin-top:8px;opacity:0.6">No deals yet</div>'}
+                  ${cards || '<div style="font-size:11px;color:var(--text-3);margin-top:8px;opacity:0.6">No deals yet</div>'}
                 </div>
               </div>`;
           }).join('')}
@@ -6628,15 +6886,15 @@ function openDealDetail(dealId) {
   if (qd.county) qdBits.push(`${qd.county.name}, ${qd.county.state}`);
 
   const section = (label, inner) => `
-    <div style="margin-bottom:18px">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;font-weight:600">${label}</div>
+    <div style="margin-bottom:var(--space-6)">
+      <div style="font-size:13px;color:var(--text-1);font-weight:500;letter-spacing:-0.005em;margin-bottom:var(--space-3);padding-bottom:8px;border-bottom:0.5px solid var(--border-subtle)">${label}</div>
       ${inner}
     </div>`;
 
   const body = document.getElementById('dealDetailBody');
   body.innerHTML = `
     <div style="padding:4px 2px 2px">
-      ${section('Deal', `
+      ${section('Deal details', `
         <div class="save-grid-2" style="gap:10px">
           <div class="field" style="margin-bottom:0"><label class="label">Deal Name</label><input class="input" id="dd_name" type="text" value="${escapeHTML(deal.name || '')}" /></div>
           <div class="field" style="margin-bottom:0"><label class="label">Amount ($)</label><input class="input" id="dd_amount" type="number" step="0.01" value="${deal.amount != null ? deal.amount : ''}" placeholder="—" /></div>
@@ -6689,20 +6947,23 @@ function openDealDetail(dealId) {
         <textarea class="input" id="dd_notes" rows="5" placeholder="Leave any notes for this lead — call outcomes, follow-up reminders, preferences, quoted plans, objections…" style="resize:vertical;min-height:100px;font-family:inherit;line-height:1.5;padding:10px 12px">${escapeHTML(qd.notes || '')}</textarea>
         <div style="font-size:11px;color:var(--muted);margin-top:4px" id="dd_notes_meta">${qd.notes_updated_at ? 'Last updated ' + formatDealDate(qd.notes_updated_at) : 'Tip: click Save Changes to persist your notes.'}</div>
       `)}
-      ${section('Quote History', renderQuoteHistoryForContact(deal.contact_id, deal.id))}
+      ${section('Quote history', renderQuoteHistoryForContact(deal.contact_id, deal.id))}
       ${section('Attachments', renderAttachmentsForDeal(deal))}
-      ${section('Send Email', `
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="btn-primary" style="width:auto;padding:9px 16px;margin-top:0" onclick="openEmailTemplatesForDeal('${deal.id}')">📧 Use template</button>
-          <span style="font-size:11.5px;color:var(--muted)">Picks one of 8 pre-written templates, fills in the contact, opens Gmail in a new tab for review &amp; send.</span>
+      ${section('Send email', `
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn-primary" style="width:auto;padding:9px 16px;margin-top:0;display:inline-flex;align-items:center;gap:6px" onclick="openEmailTemplatesForDeal('${deal.id}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Use template
+          </button>
+          <span style="font-size:12px;color:var(--text-3);line-height:1.4">Picks one of 8 pre-written templates, fills in the contact, opens Gmail in a new tab for review &amp; send.</span>
         </div>
       `)}
-      ${section('Tasks & Follow-ups', renderTasksForDeal(deal))}
-      ${section('Activity Timeline', renderActivitiesForDeal(deal))}
+      ${section('Tasks &amp; follow-ups', renderTasksForDeal(deal))}
+      ${section('Activity timeline', renderActivitiesForDeal(deal))}
       ${section('Policies', renderPoliciesForContact(deal.contact_id))}
       ${section('Commission on this deal', renderDealCommissionSummary(deal))}
-      ${section('Email Threads', renderEmailThreadsForContact(contact, deal.id))}
-      ${qdBits.length ? section('Quote Snapshot', `
+      ${section('Email threads', renderEmailThreadsForContact(contact, deal.id))}
+      ${qdBits.length ? section('Quote snapshot', `
         <div class="modal-note" style="margin-top:0">${qdBits.map(b => escapeHTML(b)).join(' &nbsp;·&nbsp; ')}</div>
       `) : ''}
       <div id="dealDetailError" style="display:none;color:var(--error);font-size:12.5px;margin-top:6px"></div>
@@ -7120,30 +7381,43 @@ function renderCRMTasks() {
   const renderSection = (title, tasks, color) => {
     if (!tasks.length) return '';
     return `
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:10px;color:${color};display:flex;align-items:center;justify-content:space-between">
-          <span>${title} <span style="color:var(--muted);font-size:11px;font-weight:400;margin-left:6px">${tasks.length}</span></span>
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="section-header__title" style="color:${color}">${title}</span>
+            <span class="pill">${tasks.length}</span>
+          </div>
         </div>
-        ${tasks.map(t => renderTaskRow(t)).join('')}
+        <div style="margin-top:var(--space-2)">
+          ${tasks.map(t => renderTaskRow(t)).join('')}
+        </div>
       </div>`;
   };
 
+  const openCount = crmTasks.filter(t => !t.completed).length;
+  const doneCount = crmTasks.filter(t => t.completed).length;
+
   body.innerHTML = `
     <div style="padding:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <div class="section-header" style="margin-bottom:var(--space-5)">
         <div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Tasks & Follow-ups</div>
-          <div style="font-size:18px;color:var(--white);font-weight:500">${crmTasks.filter(t => !t.completed).length} open · ${crmTasks.filter(t => t.completed).length} completed</div>
+          <div style="font-size:24px;color:var(--text-1);font-weight:500;letter-spacing:-0.02em;line-height:1.1">Tasks &amp; follow-ups</div>
+          <div style="font-size:13px;color:var(--text-3);margin-top:4px;font-variant-numeric:tabular-nums">${openCount} open · ${doneCount} completed</div>
         </div>
-        <button class="btn-primary" style="width:auto;padding:10px 20px;margin-top:0" onclick="openTaskModal(null, {})">+ New Task</button>
+        <button class="btn-primary" style="width:auto;padding:10px 18px;margin-top:0" onclick="openTaskModal(null, {})">+ New task</button>
       </div>
-      ${renderSection('Overdue', buckets.overdue, 'var(--error)')}
-      ${renderSection('Today', buckets.today, 'var(--yellow)')}
-      ${renderSection('This Week', buckets.thisweek, 'var(--white)')}
-      ${renderSection('Later', buckets.later, 'var(--muted)')}
-      ${renderSection('No Due Date', buckets.someday, 'var(--muted)')}
-      ${renderSection('Completed', buckets.done, 'var(--success)')}
-      ${!crmTasks.length ? `<div style="padding:40px;text-align:center;color:var(--muted)">No tasks yet. Click <strong>+ New Task</strong> to create your first follow-up.</div>` : ''}
+      ${renderSection('Overdue', buckets.overdue, 'var(--status-negative)')}
+      ${renderSection('Today', buckets.today, 'var(--accent-action)')}
+      ${renderSection('This week', buckets.thisweek, 'var(--text-1)')}
+      ${renderSection('Later', buckets.later, 'var(--text-2)')}
+      ${renderSection('No due date', buckets.someday, 'var(--text-2)')}
+      ${renderSection('Completed', buckets.done, 'var(--status-positive)')}
+      ${!crmTasks.length ? `
+        <div class="empty-state">
+          <div class="empty-state-icon">✓</div>
+          <div class="empty-state-title">No tasks yet</div>
+          <div class="empty-state-msg">Click <strong>+ New task</strong> to create your first follow-up.</div>
+        </div>` : ''}
     </div>`;
 }
 
@@ -7154,23 +7428,25 @@ function renderTaskRow(t) {
     deal ? (deal.name || crmContactLabel(deal)) : '',
     contact && !deal ? [contact.first_name, contact.last_name].filter(Boolean).join(' ') : ''
   ].filter(Boolean).join(' · ');
-  const priColor = t.priority === 'high' ? 'var(--error)' : (t.priority === 'low' ? 'var(--muted)' : 'var(--yellow)');
+  const priClass = t.priority === 'high' ? 'is-negative' : (t.priority === 'low' ? '' : 'is-yellow');
   const due = formatTaskDueLabel(t);
   const bucket = crmTaskBucket(t);
-  const dueColor = bucket === 'overdue' ? 'var(--error)' : (bucket === 'today' ? 'var(--yellow)' : 'var(--muted)');
+  const dueColor = bucket === 'overdue' ? 'var(--status-negative)' : (bucket === 'today' ? 'var(--accent-action)' : 'var(--text-3)');
   return `
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-      <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTaskComplete('${t.id}', this.checked)" style="margin-top:3px;accent-color:var(--yellow);cursor:pointer" />
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border-subtle);transition:background 0.1s" onmouseover="this.style.background='rgba(255,255,255,0.015)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${t.completed ? 'checked' : ''} onchange="toggleTaskComplete('${t.id}', this.checked)" style="margin-top:3px;accent-color:var(--accent-action);cursor:pointer;width:14px;height:14px" />
       <div style="flex:1;min-width:0;cursor:pointer" onclick="openTaskModal('${t.id}', {})">
-        <div style="font-size:13px;color:${t.completed ? 'var(--muted)' : 'var(--white)'};${t.completed ? 'text-decoration:line-through' : ''};font-weight:500">${escapeHTML(t.title)}</div>
-        ${t.description ? `<div style="font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4">${escapeHTML(t.description)}</div>` : ''}
-        <div style="display:flex;gap:10px;margin-top:4px;font-size:10.5px;align-items:center;flex-wrap:wrap">
-          <span style="color:${dueColor}">${escapeHTML(due)}</span>
-          <span style="color:${priColor};text-transform:uppercase;font-weight:600;letter-spacing:0.04em">${t.priority || 'normal'}</span>
-          ${context ? `<span style="color:var(--muted);">→ ${escapeHTML(context)}${deal ? ` <a onclick="event.stopPropagation();openDealDetail('${deal.id}')" style="color:var(--yellow);text-decoration:underline;cursor:pointer;margin-left:4px">open deal</a>` : ''}</span>` : ''}
+        <div style="font-size:13.5px;color:${t.completed ? 'var(--text-3)' : 'var(--text-1)'};${t.completed ? 'text-decoration:line-through' : ''};font-weight:500;letter-spacing:-0.005em">${escapeHTML(t.title)}</div>
+        ${t.description ? `<div style="font-size:12px;color:var(--text-3);margin-top:3px;line-height:1.4">${escapeHTML(t.description)}</div>` : ''}
+        <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;align-items:center;flex-wrap:wrap">
+          <span style="color:${dueColor};font-variant-numeric:tabular-nums">${escapeHTML(due)}</span>
+          <span class="pill ${priClass}" style="padding:1px 7px;font-size:10px">${t.priority || 'normal'}</span>
+          ${context ? `<span style="color:var(--text-3)">→ ${escapeHTML(context)}${deal ? ` <a onclick="event.stopPropagation();openDealDetail('${deal.id}')" style="color:var(--accent-action);text-decoration:none;cursor:pointer;margin-left:2px;border-bottom:0.5px solid var(--accent-action-border)">open deal</a>` : ''}</span>` : ''}
         </div>
       </div>
-      <button onclick="event.stopPropagation();openTaskInGCal('${t.id}')" title="Send to Google Calendar" style="background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px;line-height:1;color:var(--muted);align-self:center">📅</button>
+      <button onclick="event.stopPropagation();openTaskInGCal('${t.id}')" title="Send to Google Calendar" style="background:transparent;border:0.5px solid var(--border-subtle);border-radius:var(--radius-md);padding:5px 9px;cursor:pointer;line-height:0;color:var(--text-3);align-self:center;transition:background 0.1s,color 0.1s" onmouseover="this.style.background='var(--bg-surface-2)';this.style.color='var(--text-1)'" onmouseout="this.style.background='transparent';this.style.color='var(--text-3)'">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </button>
     </div>`;
 }
 
@@ -8510,11 +8786,11 @@ function renderCRMReports() {
   const conversionRate = crmDeals.length ? (wonDeals.length / crmDeals.length) : 0;
 
   // ----- KPI cards row -----
-  const kpiCard = (label, value, sub, color = 'var(--yellow)') => `
-    <div class="card" style="margin-bottom:0">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">${label}</div>
-      <div style="font-size:26px;font-family:'Playfair Display',serif;color:${color};line-height:1.1">${value}</div>
-      ${sub ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${sub}</div>` : ''}
+  const kpiCard = (label, value, sub, valueClass = '') => `
+    <div class="kpi-card">
+      <div class="kpi-card__label">${label}</div>
+      <div class="kpi-card__value ${valueClass}">${value}</div>
+      ${sub ? `<div class="kpi-card__detail">${sub}</div>` : ''}
     </div>`;
   const fmtUSD = n => '$' + Math.round(n).toLocaleString();
   const fmtPct = n => (n * 100).toFixed(1) + '%';
@@ -8533,15 +8809,15 @@ function renderCRMReports() {
     const dropoff = i > 0 && funnelStages[i-1].count > 0
       ? ((s.count / funnelStages[i-1].count) * 100).toFixed(0) + '%'
       : '';
-    const barColor = i === funnelStages.length - 1 ? 'var(--success)' : 'var(--yellow)';
+    const barColor = i === funnelStages.length - 1 ? 'var(--status-positive)' : 'var(--accent-action)';
     return `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-        <div style="width:120px;font-size:12px;color:var(--white)">${s.label}</div>
-        <div style="flex:1;height:28px;background:rgba(255,255,255,0.04);border-radius:6px;position:relative;overflow:hidden">
-          <div style="height:100%;width:${widthPct}%;background:${barColor};opacity:0.7;border-radius:6px"></div>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 10px;font-size:12px;color:var(--white);font-weight:600">
+        <div style="width:120px;font-size:12.5px;color:var(--text-2);font-weight:500">${s.label}</div>
+        <div style="flex:1;height:28px;background:var(--bg-surface-2);border-radius:var(--radius-md);position:relative;overflow:hidden">
+          <div style="height:100%;width:${widthPct}%;background:${barColor};opacity:0.85;border-radius:var(--radius-md);transition:width 0.3s ease"></div>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 12px;font-size:12px;color:var(--text-1);font-weight:500;font-variant-numeric:tabular-nums">
             ${s.count}
-            ${dropoff ? `<span style="margin-left:auto;font-weight:400;color:rgba(255,255,255,0.7);font-size:11px">${dropoff} of prev</span>` : ''}
+            ${dropoff ? `<span style="margin-left:auto;font-weight:400;color:var(--text-2);font-size:11px">${dropoff} of prev</span>` : ''}
           </div>
         </div>
       </div>`;
@@ -8628,12 +8904,12 @@ function renderCRMReports() {
     .map(([src, stats]) => {
       const convRate = stats.contacts ? ((stats.won / stats.contacts) * 100).toFixed(0) + '%' : '—';
       return `
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:8px 10px">${escapeHTML(src)}</td>
-          <td style="padding:8px 10px;text-align:right">${stats.contacts}</td>
-          <td style="padding:8px 10px;text-align:right;color:var(--success)">${stats.won}</td>
-          <td style="padding:8px 10px;text-align:right;color:var(--muted)">${convRate}</td>
-          <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmtUSD(stats.mrr)}</td>
+        <tr style="border-bottom:0.5px solid var(--border-subtle);transition:background 0.1s" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+          <td style="padding:10px;color:var(--text-1)">${escapeHTML(src)}</td>
+          <td style="padding:10px;text-align:right;color:var(--text-2)">${stats.contacts}</td>
+          <td style="padding:10px;text-align:right;color:var(--status-positive);font-weight:500">${stats.won}</td>
+          <td style="padding:10px;text-align:right;color:var(--text-3)">${convRate}</td>
+          <td style="padding:10px;text-align:right;color:var(--accent-action);font-weight:500">${fmtUSD(stats.mrr)}</td>
         </tr>`;
     }).join('');
 
@@ -8656,73 +8932,84 @@ function renderCRMReports() {
     .map(([carrier, stats]) => {
       const sharePct = ((stats.mrr / carrierTotal) * 100).toFixed(0) + '%';
       return `
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:8px 10px">${escapeHTML(carrier)}</td>
-          <td style="padding:8px 10px;text-align:right">${stats.policies}</td>
-          <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmtUSD(stats.mrr)}</td>
-          <td style="padding:8px 10px;text-align:right;color:var(--success)">${fmtUSD(stats.monthlyCommission)}</td>
-          <td style="padding:8px 10px;text-align:right;color:var(--muted)">${sharePct}</td>
+        <tr style="border-bottom:0.5px solid var(--border-subtle);transition:background 0.1s" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+          <td style="padding:10px;color:var(--text-1)">${escapeHTML(carrier)}</td>
+          <td style="padding:10px;text-align:right;color:var(--text-2)">${stats.policies}</td>
+          <td style="padding:10px;text-align:right;color:var(--accent-action);font-weight:500">${fmtUSD(stats.mrr)}</td>
+          <td style="padding:10px;text-align:right;color:var(--status-positive)">${fmtUSD(stats.monthlyCommission)}</td>
+          <td style="padding:10px;text-align:right;color:var(--text-3)">${sharePct}</td>
         </tr>`;
     }).join('');
 
   // ----- Empty-state helper for users with no data yet -----
-  const emptyCard = (msg) => `<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:24px">${msg}</div>`;
+  const emptyCard = (msg) => `<div style="font-size:12.5px;color:var(--text-3);text-align:center;padding:24px">${msg}</div>`;
+  const tableHeaderStyle = 'text-align:left;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500';
+  const tableHeaderRight = 'text-align:right;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500';
 
   body.innerHTML = `
     <div style="padding:20px">
       <!-- KPI cards -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px">
-        ${kpiCard('YTD Commission', fmtUSD(ytdCommission), `Annualized: ${fmtUSD(annualizedCommission)}`, 'var(--success)')}
-        ${kpiCard('MRR', fmtUSD(totalMRR), `${activePolicies.length} active polic${activePolicies.length === 1 ? 'y' : 'ies'}`)}
-        ${kpiCard('Active Clients', String(activeClients), '')}
-        ${kpiCard('Conversion Rate', fmtPct(conversionRate), `${wonDeals.length} won / ${crmDeals.length} deals`)}
-        ${kpiCard('Win Rate', fmtPct(winRate), `${wonDeals.length} won / ${closedDeals} closed`, 'var(--yellow)')}
+      <div class="kpi-row">
+        ${kpiCard('YTD commission', fmtUSD(ytdCommission), `Annualized · ${fmtUSD(annualizedCommission)}`, 'is-positive')}
+        ${kpiCard('MRR', fmtUSD(totalMRR), `${activePolicies.length} active polic${activePolicies.length === 1 ? 'y' : 'ies'}`, 'is-yellow')}
+        ${kpiCard('Active clients', String(activeClients), '')}
+        ${kpiCard('Conversion rate', fmtPct(conversionRate), `${wonDeals.length} won / ${crmDeals.length} deals`)}
+        ${kpiCard('Win rate', fmtPct(winRate), `${wonDeals.length} won / ${closedDeals} closed`, 'is-yellow')}
       </div>
 
       <!-- Conversion funnel -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:12px">Conversion Funnel</div>
-        ${savedLeads.length || crmDeals.length ? funnelHTML : emptyCard('No saved leads or deals yet — try saving a quote.')}
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header"><div class="section-header__title">Conversion funnel</div></div>
+        <div style="margin-top:var(--space-3)">
+          ${savedLeads.length || crmDeals.length ? funnelHTML : emptyCard('No saved leads or deals yet — try saving a quote.')}
+        </div>
       </div>
 
       <!-- MRR trend -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:12px">MRR Trend — last 12 months</div>
-        ${activePolicies.length ? mrrChartSVG : emptyCard('Add policies with start dates and monthly premiums to populate this chart.')}
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header">
+          <div>
+            <div class="section-header__title">MRR trend</div>
+            <div class="section-header__sub">Last 12 months</div>
+          </div>
+        </div>
+        <div style="margin-top:var(--space-3)">
+          ${activePolicies.length ? mrrChartSVG : emptyCard('Add policies with start dates and monthly premiums to populate this chart.')}
+        </div>
       </div>
 
       <!-- Lead source ROI -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:12px">Lead Source ROI</div>
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header"><div class="section-header__title">Lead source ROI</div></div>
         ${sourceRows ? `
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;margin-top:var(--space-2)">
             <thead>
-              <tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Source</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Contacts</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Won</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Conv %</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">MRR</th>
+              <tr style="border-bottom:0.5px solid var(--border-subtle)">
+                <th style="${tableHeaderStyle}">Source</th>
+                <th style="${tableHeaderRight}">Contacts</th>
+                <th style="${tableHeaderRight}">Won</th>
+                <th style="${tableHeaderRight}">Conv %</th>
+                <th style="${tableHeaderRight}">MRR</th>
               </tr>
             </thead>
             <tbody>${sourceRows}</tbody>
           </table>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">Tip: tag every new lead's source so this table tells you where your best clients come from.</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:10px">Tag every new lead's source so this table tells you where your best clients come from.</div>
         ` : emptyCard('No contacts yet.')}
       </div>
 
       <!-- Carrier breakdown -->
-      <div class="card" style="margin-bottom:0">
-        <div class="card-title" style="margin-bottom:12px">Book by Carrier</div>
+      <div class="card" style="margin-bottom:0;background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header"><div class="section-header__title">Book by carrier</div></div>
         ${carrierRows ? `
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;margin-top:var(--space-2)">
             <thead>
-              <tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Policies</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">MRR</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Monthly Comm</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Share</th>
+              <tr style="border-bottom:0.5px solid var(--border-subtle)">
+                <th style="${tableHeaderStyle}">Carrier</th>
+                <th style="${tableHeaderRight}">Policies</th>
+                <th style="${tableHeaderRight}">MRR</th>
+                <th style="${tableHeaderRight}">Monthly comm</th>
+                <th style="${tableHeaderRight}">Share</th>
               </tr>
             </thead>
             <tbody>${carrierRows}</tbody>
@@ -9150,102 +9437,102 @@ function renderBonusTracker() {
   const councilQualified = councilQualifiedAV && councilQualifiedUWTR && councilQualifiedSGITR;
 
   const statusBadge = (qualified, partial) => {
-    if (qualified) return `<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--success);background:rgba(74,222,128,0.15)">On Pace</span>`;
-    if (partial)   return `<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--yellow);background:rgba(253,199,47,0.15)">Building</span>`;
-    return `<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);background:rgba(255,255,255,0.06)">Not Qualified</span>`;
+    if (qualified) return `<span class="pill is-positive">On pace</span>`;
+    if (partial)   return `<span class="pill is-yellow">Building</span>`;
+    return `<span class="pill">Not qualified</span>`;
   };
 
   const bar = (current, target, color) => {
     const p2 = pct(current, target);
     return `
-      <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;margin-top:6px">
-        <div style="height:100%;width:${p2}%;background:${color};border-radius:4px;transition:width 0.3s ease"></div>
+      <div style="height:6px;background:rgba(255,255,255,0.05);border-radius:999px;overflow:hidden;margin-top:10px">
+        <div style="height:100%;width:${p2}%;background:${color};border-radius:999px;transition:width 0.3s ease"></div>
       </div>`;
   };
 
   const checkRow = (passed, text) => `
-    <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:${passed ? 'var(--success)' : 'var(--muted)'};margin-top:3px">
-      <span style="font-weight:700">${passed ? '✓' : '○'}</span>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:${passed ? 'var(--status-positive)' : 'var(--text-3)'};margin-top:6px">
+      <span style="width:14px;display:inline-flex;justify-content:center;font-weight:500">${passed ? '✓' : '○'}</span>
       <span>${text}</span>
     </div>`;
 
-  return `
-    <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+  // 2026 sub-card style (matches .kpi-card aesthetic)
+  const subCard = (accentColor, title, sub, badge, valueHTML, barHTML, checks) => `
+    <div style="background:var(--bg-surface-1);border:0.5px solid var(--border-subtle);border-radius:var(--radius-lg);padding:var(--space-4);transition:background 0.15s,border-color 0.15s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:var(--space-3)">
         <div>
-          <div class="card-title" style="margin-bottom:2px">Bonus Programs — 2026</div>
-          <div style="font-size:11px;color:var(--muted)">VIP & VBS contest period: Jan 1 – Jun 30 · Council: Full Year · AV = monthly premium × 12</div>
+          <div style="font-size:13px;font-weight:500;color:${accentColor};letter-spacing:-0.005em">${title}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">${sub}</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">YTD Taken Rates from portal:</div>
-          <div style="display:flex;gap:6px;align-items:center">
-            <label style="font-size:11px;color:var(--muted)">UW</label>
+        ${badge}
+      </div>
+      <div style="font-size:24px;font-weight:500;color:${accentColor};font-variant-numeric:tabular-nums;letter-spacing:-0.02em;line-height:1">${valueHTML}</div>
+      ${barHTML}
+      <div style="margin-top:10px">
+        ${checks}
+      </div>
+    </div>`;
+
+  return `
+    <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle)">
+      <div class="section-header">
+        <div>
+          <div class="section-header__title">Bonus programs · 2026</div>
+          <div class="section-header__sub">VIP &amp; VBS · Jan 1 – Jun 30 · Council · full year</div>
+        </div>
+        <div style="display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text-3)">Taken rate</span>
+          <div style="display:flex;align-items:center;gap:4px;background:var(--bg-surface-2);border:0.5px solid var(--border-subtle);border-radius:var(--radius-md);padding:3px 8px">
+            <label style="font-size:11px;color:var(--text-3)">UW</label>
             <input id="bonus_uw_tr" type="number" step="0.1" min="0" max="100"
-                   value="${trUW != null ? trUW : ''}"
-                   placeholder="—"
-                   style="width:60px;padding:4px 6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:4px;color:var(--white);font-size:12px">
-            <span style="font-size:11px;color:var(--muted)">%</span>
+                   value="${trUW != null ? trUW : ''}" placeholder="—"
+                   style="width:48px;padding:2px 4px;background:transparent;border:none;color:var(--text-1);font-size:12px;font-variant-numeric:tabular-nums;outline:none">
+            <span style="font-size:11px;color:var(--text-3)">%</span>
           </div>
-          <div style="display:flex;gap:6px;align-items:center">
-            <label style="font-size:11px;color:var(--muted)">SGI</label>
+          <div style="display:flex;align-items:center;gap:4px;background:var(--bg-surface-2);border:0.5px solid var(--border-subtle);border-radius:var(--radius-md);padding:3px 8px">
+            <label style="font-size:11px;color:var(--text-3)">SGI</label>
             <input id="bonus_sgi_tr" type="number" step="0.1" min="0" max="100"
-                   value="${trSGI != null ? trSGI : ''}"
-                   placeholder="—"
-                   style="width:60px;padding:4px 6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:4px;color:var(--white);font-size:12px">
-            <span style="font-size:11px;color:var(--muted)">%</span>
+                   value="${trSGI != null ? trSGI : ''}" placeholder="—"
+                   style="width:48px;padding:2px 4px;background:transparent;border:none;color:var(--text-1);font-size:12px;font-variant-numeric:tabular-nums;outline:none">
+            <span style="font-size:11px;color:var(--text-3)">%</span>
           </div>
-          <button class="btn-ghost" style="padding:4px 10px;font-size:11px" onclick="saveBonusTRFromInputs()">Save</button>
+          <button class="btn-ghost" style="padding:5px 12px;font-size:12px" onclick="saveBonusTRFromInputs()">Save</button>
         </div>
       </div>
-      <div style="font-size:10.5px;color:var(--muted);margin-top:-8px;margin-bottom:12px">${trUpdated} · Pull from agent.ushadvisors.com → Reports → Taken Rate</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:-4px;margin-bottom:var(--space-4)">${trUpdated}</div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-
-        <!-- VIP -->
-        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:rgba(255,255,255,0.02)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div>
-              <div style="font-size:13px;color:var(--success);font-weight:600">VIP Production Bonus</div>
-              <div style="font-size:10.5px;color:var(--muted)">$3M pool · SGI-driven · H1 2026</div>
-            </div>
-            ${statusBadge(vipQualified, p.vipSgiCount > 0 || trSGI != null)}
-          </div>
-          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--success)">${p.vipSgiCount}<span style="font-size:13px;color:var(--muted)"> / ${vipCountTarget} apps</span></div>
-          ${bar(p.vipSgiCount, vipCountTarget, 'var(--success)')}
-          ${checkRow(vipQualifiedCount, `20+ Issued SGI Base Health apps (${p.vipSgiCount}/${vipCountTarget})`)}
-          ${checkRow(vipQualifiedTR, `≥65% SGI YTD Taken Rate (${trSGIStr})`)}
-        </div>
-
-        <!-- VBS -->
-        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:rgba(255,255,255,0.02)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div>
-              <div style="font-size:13px;color:var(--yellow);font-weight:600">VBS Program</div>
-              <div style="font-size:10.5px;color:var(--muted)">$9M pool · UW-driven · H1 2026</div>
-            </div>
-            ${statusBadge(vbsQualified, p.vbsUwAV > 0 || trUW != null)}
-          </div>
-          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(p.vbsUwAV)}<span style="font-size:13px;color:var(--muted)"> / ${fmt(vbsAVTarget)}</span></div>
-          ${bar(p.vbsUwAV, vbsAVTarget, 'var(--yellow)')}
-          ${checkRow(vbsQualifiedAV, `$300K Issued UW AV (${fmt(p.vbsUwAV)} of ${fmt(vbsAVTarget)})`)}
-          ${checkRow(vbsQualifiedTR, `≥60% UW YTD Taken Rate (${trUWStr})`)}
-        </div>
-
-        <!-- Council of Excellence -->
-        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:rgba(255,255,255,0.02)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div>
-              <div style="font-size:13px;color:var(--white);font-weight:600">Council of Excellence</div>
-              <div style="font-size:10.5px;color:var(--muted)">Personal Production · Full year</div>
-            </div>
-            ${statusBadge(councilQualified, p.councilTotalAV > 0 || trUW != null || trSGI != null)}
-          </div>
-          <div style="font-size:24px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(p.councilTotalAV)}<span style="font-size:13px;color:var(--muted)"> / ${fmt(councilAVTarget)}</span></div>
-          ${bar(p.councilTotalAV, councilAVTarget, 'var(--white)')}
-          ${checkRow(councilQualifiedAV, `$1M Issued AV (${fmt(p.councilTotalAV)} of ${fmt(councilAVTarget)})`)}
-          ${checkRow(councilQualifiedUWTR, `≥60% UW Taken Rate (${trUWStr})`)}
-          ${checkRow(councilQualifiedSGITR, `≥65% SGI Taken Rate (${trSGIStr})`)}
-        </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--space-3)">
+        ${subCard(
+          'var(--status-positive)',
+          'VIP Production Bonus',
+          '$3M pool · SGI-driven',
+          statusBadge(vipQualified, p.vipSgiCount > 0 || trSGI != null),
+          `${p.vipSgiCount}<span style="font-size:13px;font-weight:400;color:var(--text-3);margin-left:4px"> / ${vipCountTarget} apps</span>`,
+          bar(p.vipSgiCount, vipCountTarget, 'var(--status-positive)'),
+          checkRow(vipQualifiedCount, `20+ Issued SGI base health apps`) +
+          checkRow(vipQualifiedTR, `≥65% SGI YTD Taken Rate · ${trSGIStr}`)
+        )}
+        ${subCard(
+          'var(--accent-action)',
+          'VBS Program',
+          '$9M pool · UW-driven',
+          statusBadge(vbsQualified, p.vbsUwAV > 0 || trUW != null),
+          `${fmt(p.vbsUwAV)}<span style="font-size:13px;font-weight:400;color:var(--text-3);margin-left:4px"> / ${fmt(vbsAVTarget)}</span>`,
+          bar(p.vbsUwAV, vbsAVTarget, 'var(--accent-action)'),
+          checkRow(vbsQualifiedAV, `$300K Issued UW AV`) +
+          checkRow(vbsQualifiedTR, `≥60% UW YTD Taken Rate · ${trUWStr}`)
+        )}
+        ${subCard(
+          'var(--text-1)',
+          'Council of Excellence',
+          'Personal Production · full year',
+          statusBadge(councilQualified, p.councilTotalAV > 0 || trUW != null || trSGI != null),
+          `${fmt(p.councilTotalAV)}<span style="font-size:13px;font-weight:400;color:var(--text-3);margin-left:4px"> / ${fmt(councilAVTarget)}</span>`,
+          bar(p.councilTotalAV, councilAVTarget, 'var(--text-1)'),
+          checkRow(councilQualifiedAV, `$1M Issued AV`) +
+          checkRow(councilQualifiedUWTR, `≥60% UW Taken Rate · ${trUWStr}`) +
+          checkRow(councilQualifiedSGITR, `≥65% SGI Taken Rate · ${trSGIStr}`)
+        )}
       </div>
     </div>`;
 }
@@ -9272,9 +9559,9 @@ function setTableSort(tableKey, col) {
 function sortableHeader(tableKey, col, label, align) {
   const s = crmTableSorts[tableKey];
   const active = s && s.col === col;
-  const arrow = active ? (s.dir === 'desc' ? ' ▼' : ' ▲') : '';
-  const color = active ? 'var(--yellow)' : 'var(--muted)';
-  return `<th style="text-align:${align||'left'};padding:8px 10px;color:${color};font-size:11px;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;user-select:none" onclick="setTableSort('${tableKey}','${col}')">${escapeHTML(label)}${arrow}</th>`;
+  const arrow = active ? (s.dir === 'desc' ? ' ↓' : ' ↑') : '';
+  const color = active ? 'var(--text-1)' : 'var(--text-3)';
+  return `<th style="text-align:${align||'left'};padding:10px;color:${color};font-size:11px;letter-spacing:0.02em;font-weight:500;cursor:pointer;user-select:none;transition:color 0.15s" onclick="setTableSort('${tableKey}','${col}')">${escapeHTML(label)}${arrow}</th>`;
 }
 
 function applyTableSort(rows, tableKey, accessors, defaultCol, defaultDir) {
@@ -9468,9 +9755,10 @@ function renderCRMCommissions() {
   // (proxy for "user hasn't done their first sales import yet")
   const showHint = (active.length < 20);
   const importBanner = showHint ? `
-    <div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)">
-      <div>
-        <strong style="color:var(--success)">Tip:</strong> upload your latest USHA Sales Report on the <strong style="color:var(--white)">YTD Sales</strong> tab to populate the tracker. Manual edits are preserved on every re-upload.
+    <div style="background:var(--accent-info-bg);border:0.5px solid var(--accent-info-border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:var(--space-3);display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);flex-wrap:wrap;font-size:13px;color:var(--text-2)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:6px;height:6px;border-radius:999px;background:var(--accent-info);flex-shrink:0"></span>
+        <span>Upload your latest USHA Sales Report on YTD Sales to populate the tracker. Manual edits are preserved on every re-upload.</span>
       </div>
       <button class="btn-ghost" style="width:auto;padding:6px 14px;margin-top:0;font-size:12px;flex-shrink:0" onclick="showCRMTab('ytdsales')">Go to YTD Sales →</button>
     </div>` : '';
@@ -9479,96 +9767,97 @@ function renderCRMCommissions() {
     <div style="padding:20px">
       ${yearSwitcher}
       ${importBanner}
-      <!-- Top KPI row — uses ACTUAL paid figures from pay data when available -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:14px">
+      <!-- 2026 KPI row — actual paid figures lead, estimates follow in a quieter row -->
+      <div class="kpi-row">
         ${actual ? `
-          <div class="card" style="margin-bottom:0;border:1px solid rgba(74,222,128,0.3)">
-            <div style="font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">YTD Earned (actual)</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(actual.commissionEarnedYTD)}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">From USHA portal · ${actual.paycheckCount} paychecks · as of ${actual.asOf}</div>
+          <div class="kpi-card is-featured">
+            <div class="kpi-card__label"><span class="kpi-card__dot"></span>YTD earned</div>
+            <div class="kpi-card__value is-yellow">${fmt(actual.commissionEarnedYTD)}</div>
+            <div class="kpi-card__detail">${actual.paycheckCount} paychecks · as of ${actual.asOf}</div>
           </div>
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Reserve Balance</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(actual.reserveBalance)}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Unearned advance · pays out as policies earn</div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Reserve balance</div>
+            <div class="kpi-card__value">${fmt(actual.reserveBalance)}</div>
+            <div class="kpi-card__detail">Unearned advance</div>
           </div>
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Advances YTD</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt(actual.advancesYTD)}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">9-month upfront commission · ${actual.paycheckCount} weekly statements</div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Advances YTD</div>
+            <div class="kpi-card__value">${fmt(actual.advancesYTD)}</div>
+            <div class="kpi-card__detail">${actual.paycheckCount} weekly statements</div>
           </div>
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Cash Banked YTD</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(actual.cashBankedYTD)}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(actual.advancesYTD)} adv + ${fmt(actual.bonusesYTD)} bonus</div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Cash banked</div>
+            <div class="kpi-card__value">${fmt(actual.cashBankedYTD)}</div>
+            <div class="kpi-card__detail">${fmt(actual.advancesYTD)} adv · ${fmt(actual.bonusesYTD)} bonus</div>
           </div>
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Net Chargebacks</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:${actual.netChargebacks < -1000 ? 'var(--error)' : 'var(--muted)'}">${fmt(actual.netChargebacks)}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(actual.chargebacksYTD)} CB · ${fmt(actual.reinstatementsYTD)} reinstated</div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Net chargebacks</div>
+            <div class="kpi-card__value ${actual.netChargebacks < -1000 ? 'is-negative' : ''}">${fmt(actual.netChargebacks)}</div>
+            <div class="kpi-card__detail">${fmt(actual.chargebacksYTD)} CB · ${fmt(actual.reinstatementsYTD)} reinstated</div>
           </div>
         ` : `
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">YTD Earned (est)</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totals.ytdEarned)}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Smoothed projection — cross-check at agent.ushadvisors.com</div>
+          <div class="kpi-card is-featured">
+            <div class="kpi-card__label"><span class="kpi-card__dot"></span>YTD earned (est)</div>
+            <div class="kpi-card__value is-yellow">${fmt(totals.ytdEarned)}</div>
+            <div class="kpi-card__detail">Smoothed projection · cross-check the portal</div>
           </div>
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Currently Earning</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt2(totals.currentMonthly)}<span style="font-size:13px;color:var(--muted)">/mo</span></div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(totals.currentMonthly * 12)} annualized</div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Currently earning</div>
+            <div class="kpi-card__value">${fmt2(totals.currentMonthly)}<span class="kpi-card__value-suffix">/mo</span></div>
+            <div class="kpi-card__detail">${fmt(totals.currentMonthly * 12)} annualized</div>
           </div>
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">10-Yr Lifetime Book</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totals.lifetime10y)}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">If every active policy stays in force</div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">10-yr lifetime</div>
+            <div class="kpi-card__value">${fmt(totals.lifetime10y)}</div>
+            <div class="kpi-card__detail">If every active policy stays in force</div>
           </div>
-          <div class="card" style="margin-bottom:0">
-            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Active Policies</div>
-            <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--white)">${totals.count}</div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${fmt(totals.mrr)} carrier MRR</div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Active policies</div>
+            <div class="kpi-card__value">${totals.count}</div>
+            <div class="kpi-card__detail">${fmt(totals.mrr)} carrier MRR</div>
           </div>
         `}
       </div>
 
       ${actual ? `
-        <!-- Secondary row: forward-looking projections from rate book + As Earned breakdown -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:14px">
-          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
-            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Currently Earning <span style="opacity:0.5">(est.)</span></div>
-            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--yellow)">${fmt2(totals.currentMonthly)}<span style="font-size:11px;color:var(--muted)">/mo</span></div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(totals.currentMonthly * 12)} annualized · rate-book</div>
+        <!-- Secondary row: forward-looking projections (smaller, quieter) -->
+        <div class="kpi-row" style="margin-top:-${'4px'}">
+          <div class="kpi-card" style="opacity:0.85">
+            <div class="kpi-card__label">Currently earning · est</div>
+            <div class="kpi-card__value" style="font-size:22px">${fmt2(totals.currentMonthly)}<span class="kpi-card__value-suffix">/mo</span></div>
+            <div class="kpi-card__detail">${fmt(totals.currentMonthly * 12)} annualized · rate-book</div>
           </div>
-          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
-            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">10-Yr Lifetime <span style="opacity:0.5">(est.)</span></div>
-            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(totals.lifetime10y)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">If every active policy stays in force</div>
+          <div class="kpi-card" style="opacity:0.85">
+            <div class="kpi-card__label">10-yr lifetime · est</div>
+            <div class="kpi-card__value" style="font-size:22px">${fmt(totals.lifetime10y)}</div>
+            <div class="kpi-card__detail">If every active policy stays in force</div>
           </div>
-          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
-            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Active Policies</div>
-            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--white)">${totals.count}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(totals.mrr)} carrier MRR</div>
+          <div class="kpi-card" style="opacity:0.85">
+            <div class="kpi-card__label">Active policies</div>
+            <div class="kpi-card__value" style="font-size:22px">${totals.count}</div>
+            <div class="kpi-card__detail">${fmt(totals.mrr)} carrier MRR</div>
           </div>
-          <div class="card" style="margin-bottom:0;background:rgba(255,255,255,0.02)">
-            <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">As-Earned YTD</div>
-            <div style="font-size:22px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(actual.asEarnedYTD)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">Earned past advance · pays in cash</div>
+          <div class="kpi-card" style="opacity:0.85">
+            <div class="kpi-card__label">As-earned YTD</div>
+            <div class="kpi-card__value" style="font-size:22px">${fmt(actual.asEarnedYTD)}</div>
+            <div class="kpi-card__detail">Earned past advance · pays in cash</div>
           </div>
         </div>
       ` : ''}
 
       ${untrackedCount > 0 ? `
-        <div style="background:rgba(253,199,47,0.06);border:1px solid rgba(253,199,47,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--muted)">
-          <span style="color:var(--yellow);font-weight:600">${untrackedCount}</span> active ${untrackedCount === 1 ? 'policy has' : 'policies have'} no commission data — open ${untrackedCount === 1 ? 'it' : 'them'} and pick a USHA Product (or fill the manual fields) to include.
+        <div style="background:var(--accent-action-bg);border:0.5px solid var(--accent-action-border);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:var(--space-3);font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:10px">
+          <span style="width:6px;height:6px;border-radius:999px;background:var(--accent-action);flex-shrink:0"></span>
+          <span><span style="color:var(--accent-action);font-weight:500">${untrackedCount}</span> active ${untrackedCount === 1 ? 'policy has' : 'policies have'} no commission data — open ${untrackedCount === 1 ? 'it' : 'them'} and pick a USHA product to include.</span>
         </div>
       ` : ''}
 
       ${renderBonusTracker()}
 
       ${channelRows || referralRow ? `
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-title" style="margin-bottom:8px">By Channel</div>
-          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:6px 12px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid var(--border)">
+        <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+          <div class="section-header"><div class="section-header__title">By channel</div></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:6px 12px;font-size:11px;color:var(--text-3);letter-spacing:0.02em;border-bottom:0.5px solid var(--border-subtle)">
             <div>Channel</div>
             <div style="text-align:right">MRR</div>
             <div style="text-align:right">Now/mo</div>
@@ -9581,15 +9870,15 @@ function renderCRMCommissions() {
       ` : ''}
 
       ${carrierRows ? `
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-title" style="margin-bottom:8px">By Carrier (active only)</div>
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+          <div class="section-header"><div class="section-header__title">By carrier <span class="section-header__sub" style="margin-left:6px">active only</span></div></div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums">
             <thead>
-              <tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Carrier</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Policies</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">MRR</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Now/mo</th>
+              <tr style="border-bottom:0.5px solid var(--border-subtle)">
+                <th style="text-align:left;padding:8px 10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Carrier</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Policies</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">MRR</th>
+                <th style="text-align:right;padding:8px 10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Now/mo</th>
               </tr>
             </thead>
             <tbody>${carrierRows}</tbody>
@@ -9598,11 +9887,16 @@ function renderCRMCommissions() {
       ` : ''}
 
       ${policyRows ? `
-        <div class="card">
-          <div class="card-title" style="margin-bottom:10px">All Active Policies <span style="font-size:11px;color:var(--muted);font-weight:400">— click any column to sort</span></div>
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <div class="card" style="background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+          <div class="section-header">
+            <div>
+              <div class="section-header__title">All active policies</div>
+              <div class="section-header__sub">Click any column to sort</div>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums">
             <thead>
-              <tr style="border-bottom:1px solid var(--border)">
+              <tr style="border-bottom:0.5px solid var(--border-subtle)">
                 ${sortableHeader('commission_policies','client','Client','left')}
                 ${sortableHeader('commission_policies','product','Product','left')}
                 ${sortableHeader('commission_policies','channel','Channel','left')}
@@ -9701,22 +9995,23 @@ function renderCRMRenewals() {
         </tr>`;
     }).join('');
     return `
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:10px;display:flex;align-items:center;gap:10px">
-          <span style="color:${color}">${title}</span>
-          <span style="font-size:11px;color:var(--muted);font-weight:400;background:rgba(253,199,47,0.08);border:1px solid rgba(253,199,47,0.2);padding:2px 8px;border-radius:10px">${policies.length}</span>
-          ${meta ? `<span style="font-size:11px;color:var(--muted);font-weight:400">${meta}</span>` : ''}
-          <div style="flex:1"></div>
-          <button class="btn-ghost" style="padding:5px 12px;font-size:11px;width:auto;margin:0" onclick="createBulkRenewalTasks('${bucketKey}')">Create tasks for all</button>
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="section-header__title" style="color:${color}">${title}</span>
+            <span class="pill">${policies.length}</span>
+            ${meta ? `<span class="section-header__sub">${meta}</span>` : ''}
+          </div>
+          <button class="btn-ghost" style="padding:6px 12px;font-size:12px;width:auto;margin:0" onclick="createBulkRenewalTasks('${bucketKey}')">Create tasks for all</button>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums">
           <thead>
-            <tr style="border-bottom:1px solid var(--border)">
+            <tr style="border-bottom:0.5px solid var(--border-subtle)">
               ${sortableHeader(tableKey,'client','Client','left')}
               ${sortableHeader(tableKey,'carrier','Carrier / Plan','left')}
-              ${sortableHeader(tableKey,'renewal','Renewal Date','left')}
+              ${sortableHeader(tableKey,'renewal','Renewal','left')}
               ${sortableHeader(tableKey,'days','When','left')}
-              <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Task</th>
+              <th style="text-align:right;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Action</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -9732,27 +10027,27 @@ function renderCRMRenewals() {
     <div style="padding:20px">
       ${renderOEPBanner()}
       ${renderOEPProgressCard()}
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px">
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Overdue</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets.overdue.length ? 'var(--error)' : 'var(--muted)'}">${buckets.overdue.length}</div>
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-card__label">Overdue</div>
+          <div class="kpi-card__value ${buckets.overdue.length ? 'is-negative' : ''}">${buckets.overdue.length}</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Next 30 days</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets['30'].length ? 'var(--yellow)' : 'var(--muted)'}">${buckets['30'].length}</div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">Next 30 days</div>
+          <div class="kpi-card__value ${buckets['30'].length ? 'is-yellow' : ''}">${buckets['30'].length}</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">31–60 days</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets['60'].length ? 'var(--yellow)' : 'var(--muted)'}">${buckets['60'].length}</div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">31–60 days</div>
+          <div class="kpi-card__value ${buckets['60'].length ? 'is-yellow' : ''}">${buckets['60'].length}</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">61–90 days</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets['90'].length ? 'var(--white)' : 'var(--muted)'}">${buckets['90'].length}</div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">61–90 days</div>
+          <div class="kpi-card__value">${buckets['90'].length}</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">OEP Window</div>
-          <div style="font-size:28px;font-family:'Playfair Display',serif;color:${buckets.oep.length ? 'var(--yellow)' : 'var(--muted)'}">${buckets.oep.length}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">${oepMeta}</div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">OEP window</div>
+          <div class="kpi-card__value ${buckets.oep.length ? 'is-yellow' : ''}">${buckets.oep.length}</div>
+          <div class="kpi-card__detail">${oepMeta}</div>
         </div>
       </div>
 
@@ -10782,131 +11077,133 @@ function renderCRMYTDSales() {
     <div style="padding:20px">
       ${yearSwitcher}
       <!-- Top KPI strip -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:14px">
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Issued AV</div>
-          <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--success)">${fmt(issuedAV)}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${issued.length} active + ${pending.length} pending</div>
+      <div class="kpi-row">
+        <div class="kpi-card is-featured">
+          <div class="kpi-card__label"><span class="kpi-card__dot"></span>Issued AV</div>
+          <div class="kpi-card__value is-yellow">${fmt(issuedAV)}</div>
+          <div class="kpi-card__detail">${issued.length} active + ${pending.length} pending</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Submitted AV</div>
-          <div style="font-size:26px;font-family:'Playfair Display',serif;color:var(--white)">${fmt(submittedAV)}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${ytdPolicies.length} apps total YTD</div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">Submitted AV</div>
+          <div class="kpi-card__value">${fmt(submittedAV)}</div>
+          <div class="kpi-card__detail">${ytdPolicies.length} apps YTD</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">UW Taken Rate</div>
-          <div style="font-size:26px;font-family:'Playfair Display',serif;color:${tr.uwTR != null && tr.uwTR >= 60 ? 'var(--success)' : 'var(--yellow)'}">${tr.uwTR != null ? tr.uwTR.toFixed(1) + '%' : '—'}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${tr.uwIssued}/${tr.uwSubmitted} issued · target ≥60%</div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">UW Taken Rate</div>
+          <div class="kpi-card__value ${tr.uwTR != null && tr.uwTR >= 60 ? 'is-positive' : ''}">${tr.uwTR != null ? tr.uwTR.toFixed(1) + '%' : '—'}</div>
+          <div class="kpi-card__detail">${tr.uwIssued}/${tr.uwSubmitted} issued · target ≥60%</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">SGI Taken Rate</div>
-          <div style="font-size:26px;font-family:'Playfair Display',serif;color:${tr.sgiTR != null && tr.sgiTR >= 65 ? 'var(--success)' : 'var(--yellow)'}">${tr.sgiTR != null ? tr.sgiTR.toFixed(1) + '%' : '—'}${tr.sgiFixed ? '<span style="font-size:11px;color:var(--muted);margin-left:4px">fixed</span>' : ''}</div>
-          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${tr.sgiIssued}/${tr.sgiSubmitted} issued · target ≥65%</div>
+        <div class="kpi-card">
+          <div class="kpi-card__label">SGI Taken Rate</div>
+          <div class="kpi-card__value ${tr.sgiTR != null && tr.sgiTR >= 65 ? 'is-positive' : ''}">${tr.sgiTR != null ? tr.sgiTR.toFixed(1) + '%' : '—'}${tr.sgiFixed ? '<span class="kpi-card__value-suffix">fixed</span>' : ''}</div>
+          <div class="kpi-card__detail">${tr.sgiIssued}/${tr.sgiSubmitted} issued · target ≥65%</div>
         </div>
-        <div class="card" style="margin-bottom:0">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Status Mix <span style="font-size:9px;font-weight:400;text-transform:none;color:var(--muted)">click to view</span></div>
-          <div style="font-size:13px;color:var(--white);line-height:1.6">
-            <div onclick="openStatusListModal('issued',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px;transition:background 0.1s" onmouseover="this.style.background='rgba(74,222,128,0.08)'" onmouseout="this.style.background=''"><span style="color:var(--success);font-weight:600">${issued.length}</span> issued <span style="color:var(--muted);font-size:11px">›</span></div>
-            <div onclick="openStatusListModal('pending',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px" onmouseover="this.style.background='rgba(253,199,47,0.08)'" onmouseout="this.style.background=''"><span style="color:var(--yellow);font-weight:600">${pending.length}</span> pending <span style="color:var(--muted);font-size:11px">›</span></div>
-            <div onclick="openStatusListModal('declined',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background=''"><span style="color:var(--muted);font-weight:600">${declined.length}</span> declined/withdrawn <span style="color:var(--muted);font-size:11px">›</span></div>
-            <div onclick="openStatusListModal('cancelled',${year})" style="cursor:pointer;padding:1px 4px;border-radius:4px" onmouseover="this.style.background='rgba(239,68,68,0.08)'" onmouseout="this.style.background=''"><span style="color:var(--error);font-weight:600">${cancelled.length}</span> cancelled <span style="color:var(--muted);font-size:11px">›</span></div>
+        <div class="kpi-card">
+          <div class="kpi-card__label" style="margin-bottom:8px">Status mix <span style="margin-left:auto;color:var(--text-3);font-size:10px">tap to view</span></div>
+          <div style="font-size:12.5px;color:var(--text-2);line-height:1.7;font-variant-numeric:tabular-nums">
+            <div onclick="openStatusListModal('issued',${year})" style="cursor:pointer;padding:1px 6px;margin:0 -6px;border-radius:4px;transition:background 0.1s" onmouseover="this.style.background='rgba(52,211,153,0.06)'" onmouseout="this.style.background=''"><span style="color:var(--status-positive);font-weight:500">${issued.length}</span> issued</div>
+            <div onclick="openStatusListModal('pending',${year})" style="cursor:pointer;padding:1px 6px;margin:0 -6px;border-radius:4px" onmouseover="this.style.background='rgba(253,199,47,0.06)'" onmouseout="this.style.background=''"><span style="color:var(--accent-action);font-weight:500">${pending.length}</span> pending</div>
+            <div onclick="openStatusListModal('declined',${year})" style="cursor:pointer;padding:1px 6px;margin:0 -6px;border-radius:4px" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''"><span style="color:var(--text-3);font-weight:500">${declined.length}</span> declined</div>
+            <div onclick="openStatusListModal('cancelled',${year})" style="cursor:pointer;padding:1px 6px;margin:0 -6px;border-radius:4px" onmouseover="this.style.background='rgba(248,113,113,0.06)'" onmouseout="this.style.background=''"><span style="color:var(--status-negative);font-weight:500">${cancelled.length}</span> cancelled</div>
           </div>
         </div>
       </div>
 
       <!-- Pace toward award targets -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:14px">Pace toward 2026 Award Targets</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header"><div class="section-header__title">Pace toward 2026 award targets</div></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--space-4);margin-top:var(--space-3)">
           <div>
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-              <div style="font-size:13px;color:var(--success);font-weight:600">VIP — SGI apps (H1)</div>
-              <div style="font-size:18px;color:var(--success);font-weight:600;font-family:'Playfair Display',serif">${vipSgiCount} / 20</div>
+              <div style="font-size:13px;color:var(--status-positive);font-weight:500">VIP — SGI apps · H1</div>
+              <div style="font-size:18px;color:var(--status-positive);font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-0.01em">${vipSgiCount} / 20</div>
             </div>
-            ${bar(vipSgiCount, 20, 'var(--success)')}
-            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">$3M pool · need 20+ Issued SGI Base Health apps + ≥65% SGI TR by Jun 30</div>
+            ${bar(vipSgiCount, 20, 'var(--status-positive)')}
+            <div style="font-size:11px;color:var(--text-3);margin-top:6px">$3M pool · 20+ Issued SGI base health apps + ≥65% SGI TR by Jun 30</div>
           </div>
           <div>
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-              <div style="font-size:13px;color:var(--yellow);font-weight:600">VBS — UW Issued AV (H1)</div>
-              <div style="font-size:18px;color:var(--yellow);font-weight:600;font-family:'Playfair Display',serif">${fmt(vbsUwAV)} / ${fmt(300000)}</div>
+              <div style="font-size:13px;color:var(--accent-action);font-weight:500">VBS — UW Issued AV · H1</div>
+              <div style="font-size:18px;color:var(--accent-action);font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-0.01em">${fmt(vbsUwAV)} / ${fmt(300000)}</div>
             </div>
-            ${bar(vbsUwAV, 300000, 'var(--yellow)')}
-            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">$9M pool · need $300K UW Issued AV + ≥60% UW TR by Jun 30</div>
+            ${bar(vbsUwAV, 300000, 'var(--accent-action)')}
+            <div style="font-size:11px;color:var(--text-3);margin-top:6px">$9M pool · $300K UW Issued AV + ≥60% UW TR by Jun 30</div>
           </div>
           <div>
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-              <div style="font-size:13px;color:var(--white);font-weight:600">Council — Total Issued AV (FY)</div>
-              <div style="font-size:18px;color:var(--white);font-weight:600;font-family:'Playfair Display',serif">${fmt(councilAV)} / ${fmt(1000000)}</div>
+              <div style="font-size:13px;color:var(--text-1);font-weight:500">Council — Total AV · FY</div>
+              <div style="font-size:18px;color:var(--text-1);font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-0.01em">${fmt(councilAV)} / ${fmt(1000000)}</div>
             </div>
-            ${bar(councilAV, 1000000, 'var(--white)')}
-            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">Council of Excellence · $1M Issued AV + ≥60% UW + ≥65% SGI TR by Dec 31</div>
+            ${bar(councilAV, 1000000, 'var(--text-1)')}
+            <div style="font-size:11px;color:var(--text-3);margin-top:6px">$1M Issued AV + ≥60% UW + ≥65% SGI TR by Dec 31</div>
           </div>
         </div>
       </div>
 
       <!-- Apps by month -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:10px">Apps Submitted by Month</div>
-        <div style="display:flex;align-items:flex-end;gap:8px;height:160px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header"><div class="section-header__title">Apps submitted by month</div></div>
+        <div style="display:flex;align-items:flex-end;gap:8px;height:160px;padding:6px 0;border-bottom:0.5px solid var(--border-subtle)">
           ${Object.entries(monthlyCounts).map(([m,c]) => {
             const h = Math.round((c.total / maxMonthly) * 130);
             const issuedH = Math.round((c.issued / maxMonthly) * 130);
             return `
               <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-                <div style="font-size:11px;color:var(--muted)">${c.total}</div>
+                <div style="font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums">${c.total}</div>
                 <div style="width:100%;max-width:42px;height:130px;display:flex;flex-direction:column-reverse;align-items:stretch">
-                  <div style="background:var(--success);height:${issuedH}px;border-radius:3px 3px 0 0" title="${c.issued} issued"></div>
-                  <div style="background:var(--muted);opacity:0.4;height:${h - issuedH}px;border-radius:0" title="${c.total - c.issued} not-issued"></div>
+                  <div style="background:var(--accent-action);height:${issuedH}px;border-radius:3px 3px 0 0" title="${c.issued} issued"></div>
+                  <div style="background:rgba(255,255,255,0.12);height:${h - issuedH}px;border-radius:0" title="${c.total - c.issued} not-issued"></div>
                 </div>
-                <div style="font-size:11px;color:var(--muted)">${monthLabels[parseInt(m)-1]}</div>
+                <div style="font-size:11px;color:var(--text-3)">${monthLabels[parseInt(m)-1]}</div>
               </div>`;
           }).join('')}
         </div>
-        <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted)">
-          <div><span style="display:inline-block;width:10px;height:10px;background:var(--success);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Issued</div>
-          <div><span style="display:inline-block;width:10px;height:10px;background:var(--muted);opacity:0.4;border-radius:2px;vertical-align:middle;margin-right:4px"></span>Declined / Withdrawn / Pending</div>
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text-3)">
+          <div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:var(--accent-action);border-radius:2px"></span>Issued</div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:rgba(255,255,255,0.12);border-radius:2px"></span>Declined / withdrawn / pending</div>
         </div>
       </div>
 
       <!-- Channel mix -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title" style="margin-bottom:10px">Issued AV by Channel</div>
+      <div class="card" style="margin-bottom:var(--space-3);background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header"><div class="section-header__title">Issued AV by channel</div></div>
+        <div style="margin-top:var(--space-2)">
         ${channelBars.map(([key, label, color]) => {
           const av = channelAV[key] || 0;
           const ct = channelCount[key] || 0;
           const p = totalAVForBars > 0 ? Math.round((av/totalAVForBars)*100) : 0;
           return `
-            <div style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-                <div style="color:${color};font-weight:600">${label}</div>
-                <div style="color:var(--muted)">${ct} polic${ct === 1 ? 'y' : 'ies'} · ${fmt(av)} (${p}%)</div>
+            <div style="margin-bottom:var(--space-3)">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px;font-variant-numeric:tabular-nums">
+                <div style="color:${color};font-weight:500">${label}</div>
+                <div style="color:var(--text-3)">${ct} · ${fmt(av)} · ${p}%</div>
               </div>
-              <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
-                <div style="height:100%;width:${p}%;background:${color};border-radius:4px"></div>
+              <div style="height:6px;background:rgba(255,255,255,0.05);border-radius:999px;overflow:hidden">
+                <div style="height:100%;width:${p}%;background:${color};border-radius:999px"></div>
               </div>
             </div>`;
         }).join('')}
+        </div>
       </div>
 
       <!-- Top clients -->
       ${topClients.length ? `
-        <div class="card">
-          <div class="card-title" style="margin-bottom:10px">Top 10 Clients by Issued AV (2026)</div>
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <div class="card" style="background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+          <div class="section-header"><div class="section-header__title">Top 10 clients by Issued AV</div></div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums">
             <thead>
-              <tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Client</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Policies</th>
-                <th style="text-align:right;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">Issued AV</th>
+              <tr style="border-bottom:0.5px solid var(--border-subtle)">
+                <th style="text-align:left;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Client</th>
+                <th style="text-align:right;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Policies</th>
+                <th style="text-align:right;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Issued AV</th>
               </tr>
             </thead>
             <tbody>
               ${topClients.map(c => `
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:8px 10px">${escapeHTML(c.name || '—')}</td>
-                  <td style="padding:8px 10px;text-align:right;color:var(--muted)">${c.count}</td>
-                  <td style="padding:8px 10px;text-align:right;color:var(--yellow);font-weight:600">${fmt(c.av)}</td>
+                <tr style="border-bottom:0.5px solid var(--border-subtle);transition:background 0.1s" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+                  <td style="padding:10px;color:var(--text-1)">${escapeHTML(c.name || '—')}</td>
+                  <td style="padding:10px;text-align:right;color:var(--text-3)">${c.count}</td>
+                  <td style="padding:10px;text-align:right;color:var(--accent-action);font-weight:500">${fmt(c.av)}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -11482,20 +11779,21 @@ function openPaycheckUploadModal() {
   // Reuse a generic modal pattern — we'll use showConfirm with a file input
   const html = `
     <div style="padding:6px 0">
-      <div style="font-size:13px;color:var(--white);margin-bottom:8px">Drop your <strong>Weekly Advance Statement PDF</strong> here</div>
-      <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">Get it from agent.ushadvisors.com → Reports → Weekly Advance Statement → Download PDF</div>
+      <div style="font-size:13.5px;color:var(--text-1);margin-bottom:6px;font-weight:500;letter-spacing:-0.005em">Upload your weekly advance statement</div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:var(--space-4);line-height:1.5">agent.ushadvisors.com → Reports → Weekly Advance Statement → Download PDF</div>
 
       <input type="file" id="paycheckPdfInput" accept="application/pdf" style="display:none" onchange="handlePaycheckPdfPick(event)">
       <div id="paycheckDropZone" onclick="document.getElementById('paycheckPdfInput').click()"
-           ondragover="event.preventDefault();this.style.background='rgba(74,222,128,0.08)'"
-           ondragleave="this.style.background='rgba(255,255,255,0.02)'"
-           ondrop="event.preventDefault();this.style.background='rgba(255,255,255,0.02)';handlePaycheckPdfDrop(event)"
-           style="padding:30px;border:2px dashed var(--border);border-radius:10px;background:rgba(255,255,255,0.02);text-align:center;cursor:pointer;transition:background 0.15s">
-        <div style="font-size:14px;color:var(--white);margin-bottom:4px">📄 Click to choose a PDF, or drag &amp; drop</div>
-        <div style="font-size:11px;color:var(--muted)">Single weekly statement file (.pdf)</div>
+           ondragover="event.preventDefault();this.style.background='var(--accent-info-bg)';this.style.borderColor='var(--accent-info)'"
+           ondragleave="this.style.background='var(--bg-surface-1)';this.style.borderColor='var(--border-default)'"
+           ondrop="event.preventDefault();this.style.background='var(--bg-surface-1)';this.style.borderColor='var(--border-default)';handlePaycheckPdfDrop(event)"
+           style="padding:36px 20px;border:1px dashed var(--border-default);border-radius:var(--radius-lg);background:var(--bg-surface-1);text-align:center;cursor:pointer;transition:background 0.15s,border-color 0.15s">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <div style="font-size:14px;color:var(--text-1);margin-bottom:4px;font-weight:500">Click to choose a PDF, or drag &amp; drop</div>
+        <div style="font-size:11.5px;color:var(--text-3)">Single weekly statement file</div>
       </div>
-      <div id="paycheckUploadPreview" style="display:none;margin-top:14px"></div>
-      <div id="paycheckUploadError" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
+      <div id="paycheckUploadPreview" style="display:none;margin-top:var(--space-3)"></div>
+      <div id="paycheckUploadError" style="display:none;color:var(--status-negative);font-size:12px;margin-top:var(--space-2)"></div>
     </div>`;
 
   showConfirm({
@@ -11823,19 +12121,20 @@ function openSalesUploadModal() {
   if (!crmClient || !crmUser) { showToast('Sign in first.', 'error'); return; }
   const html = `
     <div style="padding:6px 0">
-      <div style="font-size:13px;color:var(--white);margin-bottom:8px">Drop your <strong>Sales Export xlsx</strong> here</div>
-      <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">Get it from agent.ushadvisors.com → Reports → Sales Production → Export to Excel. Re-uploading wipes the year's policies and reloads them so Issued AV stays in sync with your portal.</div>
+      <div style="font-size:13.5px;color:var(--text-1);margin-bottom:6px;font-weight:500;letter-spacing:-0.005em">Upload your sales export</div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:var(--space-4);line-height:1.5">agent.ushadvisors.com → Reports → Sales Report → Export to Excel. Safe upsert by AppID — manual edits preserved.</div>
       <input type="file" id="salesXlsxInput" accept=".xlsx" style="display:none" onchange="handleSalesXlsxPick(event)">
       <div onclick="document.getElementById('salesXlsxInput').click()"
-           ondragover="event.preventDefault();this.style.background='rgba(74,222,128,0.08)'"
-           ondragleave="this.style.background='rgba(255,255,255,0.02)'"
-           ondrop="event.preventDefault();this.style.background='rgba(255,255,255,0.02)';handleSalesXlsxDrop(event)"
-           style="padding:30px;border:2px dashed var(--border);border-radius:10px;background:rgba(255,255,255,0.02);text-align:center;cursor:pointer">
-        <div style="font-size:14px;color:var(--white);margin-bottom:4px">📊 Click to choose .xlsx, or drag &amp; drop</div>
-        <div style="font-size:11px;color:var(--muted)">Single export file</div>
+           ondragover="event.preventDefault();this.style.background='var(--accent-info-bg)';this.style.borderColor='var(--accent-info)'"
+           ondragleave="this.style.background='var(--bg-surface-1)';this.style.borderColor='var(--border-default)'"
+           ondrop="event.preventDefault();this.style.background='var(--bg-surface-1)';this.style.borderColor='var(--border-default)';handleSalesXlsxDrop(event)"
+           style="padding:36px 20px;border:1px dashed var(--border-default);border-radius:var(--radius-lg);background:var(--bg-surface-1);text-align:center;cursor:pointer;transition:background 0.15s,border-color 0.15s">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+        <div style="font-size:14px;color:var(--text-1);margin-bottom:4px;font-weight:500">Click to choose .xlsx, or drag &amp; drop</div>
+        <div style="font-size:11.5px;color:var(--text-3)">Single export file</div>
       </div>
-      <div id="salesXlsxPreview" style="display:none;margin-top:14px"></div>
-      <div id="salesXlsxError" style="display:none;color:var(--error);font-size:12.5px;margin-top:8px"></div>
+      <div id="salesXlsxPreview" style="display:none;margin-top:var(--space-3)"></div>
+      <div id="salesXlsxError" style="display:none;color:var(--status-negative);font-size:12px;margin-top:var(--space-2)"></div>
     </div>`;
   showConfirm({
     title: 'Upload Sales Export',
