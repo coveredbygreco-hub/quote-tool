@@ -11992,24 +11992,18 @@ async function sendLeadToRingy(lead) {
   if (phoneDigits.length !== 10) throw new Error('Ringy requires a valid 10-digit phone number.');
 
   const params = new URLSearchParams();
+  // Field names match Ringy's "Lead field mapping" config exactly.
   params.append('sid', cfg.sid);
   params.append('authToken', cfg.authToken);
   params.append('phone_number', phoneDigits);
-  if (lead.firstName) params.append('first_name', lead.firstName);
-  if (lead.lastName)  params.append('last_name',  lead.lastName);
-  if (lead.email)     params.append('email',      lead.email);
-  if (lead.state)     params.append('state',      lead.state);
-  if (lead.address)   params.append('address',    lead.address);
-  if (lead.city)      params.append('city',       lead.city);
-  if (lead.zip)       params.append('zip',        lead.zip);
-  if (lead.dob)       params.append('dob',        lead.dob);
-  // Ringy supports a free-form notes field — pack the income, household, and source into it
-  const noteParts = [];
-  if (lead.income) noteParts.push(`Income: $${Number(lead.income).toLocaleString()}`);
-  if (lead.householdSize) noteParts.push(`HH: ${lead.householdSize}`);
-  if (lead.leadSource) noteParts.push(`Source: ${lead.leadSource}`);
-  if (lead.notes) noteParts.push(lead.notes);
-  if (noteParts.length) params.append('notes', noteParts.join(' · '));
+  if (lead.firstName) params.append('first_name',    lead.firstName);
+  if (lead.lastName)  params.append('last_name',     lead.lastName);
+  if (lead.email)     params.append('email',         lead.email);
+  if (lead.state)     params.append('state',         lead.state);
+  if (lead.address)   params.append('street_address', lead.address);
+  if (lead.city)      params.append('city',          lead.city);
+  if (lead.zip)       params.append('zip_code',      lead.zip);
+  if (lead.dob)       params.append('birthday',      lead.dob);
 
   // Strategy 1 — Supabase Edge Function proxy. Returns real success/failure.
   // Reuses the same Supabase project the CRM is already pointed at.
@@ -12020,21 +12014,17 @@ async function sendLeadToRingy(lead) {
   const fnName = (cfg.fnName || 'ringy-proxy').replace(/[^a-z0-9_-]/gi, '');
   if (sbUrl) {
     const proxyUrl = sbUrl.replace(/\/$/, '') + '/functions/v1/' + fnName;
+    // Field names match Ringy's lead vendor "Lead field mapping" config exactly.
     const proxyBody = { sid: cfg.sid, authToken: cfg.authToken, phone_number: phoneDigits };
-    if (lead.firstName) proxyBody.first_name = lead.firstName;
-    if (lead.lastName)  proxyBody.last_name  = lead.lastName;
-    if (lead.email)     proxyBody.email      = lead.email;
-    if (lead.state)     proxyBody.state      = lead.state;
-    if (lead.address)   proxyBody.address    = lead.address;
-    if (lead.city)      proxyBody.city       = lead.city;
-    if (lead.zip)       proxyBody.zip        = lead.zip;
-    if (lead.dob)       proxyBody.dob        = lead.dob;
-    const noteParts = [];
-    if (lead.income) noteParts.push(`Income: $${Number(lead.income).toLocaleString()}`);
-    if (lead.householdSize) noteParts.push(`HH: ${lead.householdSize}`);
-    if (lead.leadSource) noteParts.push(`Source: ${lead.leadSource}`);
-    if (lead.notes) noteParts.push(lead.notes);
-    if (noteParts.length) proxyBody.notes = noteParts.join(' · ');
+    if (lead.firstName) proxyBody.first_name    = lead.firstName;
+    if (lead.lastName)  proxyBody.last_name     = lead.lastName;
+    if (lead.email)     proxyBody.email         = lead.email;
+    if (lead.state)     proxyBody.state         = lead.state;
+    if (lead.address)   proxyBody.street_address = lead.address;
+    if (lead.city)      proxyBody.city          = lead.city;
+    if (lead.zip)       proxyBody.zip_code      = lead.zip;
+    // Ringy expects 'birthday' not 'dob'. Send as MM/DD/YYYY.
+    if (lead.dob)       proxyBody.birthday      = lead.dob;
 
     try {
       const sbKey = (sbSettings && sbSettings.key) || (typeof CRM_DEFAULTS !== 'undefined' ? CRM_DEFAULTS.key : '');
