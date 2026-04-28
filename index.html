@@ -4186,6 +4186,12 @@ async function sendLeadToCRM(id) {
       .single();
     if (dealErr) throw dealErr;
 
+    // Auto-create the New Lead cadence (9-touch) — explicit stage so the
+    // cadence map picks the right one even if the New Lead stage is renamed.
+    try {
+      await createLeadCadenceTasks(insertedDeal.id, contactId, lead.name || lead.firstName || '', newLeadStage.id);
+    } catch (_) { /* don't block CRM save on cadence failure */ }
+
     // 3) Mark the local lead as synced so we don't double-add
     const updated = loadSavedLeads().map(l =>
       l.id === id
@@ -4747,6 +4753,11 @@ async function loadCRMData() {
   // Safe if the table doesn't exist yet (no-op until migration runs).
   if (typeof loadCRMPaychecks === 'function') { try { await loadCRMPaychecks(); } catch (e) {} }
 
+  // Morning briefing — fires once per day after 9 AM with today's appointments
+  if (typeof ensureMorningBriefing === 'function') {
+    ensureMorningBriefing().catch(() => {});
+  }
+
   // Tier 3 auto-task scan — idempotent, runs once per session after first
   // successful data load. Creates renewal / birthday / anniversary tasks on
   // schedule. We gate with __autoScanRan so subsequent loadCRMData() calls
@@ -5279,6 +5290,268 @@ function hasOpenAutoTask(contactId, policyId, prefix, dueIso) {
     return t.due_date === dueIso;
   });
 }
+
+// =====================================================================
+// MORNING BRIEFING — once per day after 9 AM, creates a single high-priority
+// task with today's appointments listed in the description. Idempotent: only
+// one briefing per day. Tagged so it's easy to identify.
+// =====================================================================
+
+async function ensureMorningBriefing() {
+  if (!crmClient || !crmUser) return;
+  const now = new Date();
+  if (now.getHours() < 9) return; // wait until 9 AM
+  if (window.__briefingChecked) return;
+  window.__briefingChecked = true;
+
+  const todayStr = todayLocalISO();
+  const tag = `[morning-briefing:${todayStr}]`;
+
+  // Check if today's briefing already exists (per owner)
+  try {
+    const { data: existing } = await crmClient
+      .from('tasks')
+      .select('id, notes')
+      .eq('owner_id', crmUser.id)
+      .eq('due_date', todayStr)
+      .ilike('notes', `%${tag}%`)
+      .limit(1);
+    if (existing && existing.length) return;
+  } catch (_) { return; }
+
+  // Compile today's appointments from existing in-memory tasks. Skip the
+  // morning-briefing task itself and any already-completed items.
+  const todayItems = (crmTasks || [])
+    .filter(t => t.due_date === todayStr && !t.completed && !((t.notes || '').includes('[morning-briefing')))
+    .sort((a, b) => (a.due_time || '99:99').localeCompare(b.due_time || '99:99'));
+
+  const dateLabel = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  let body = `${tag}\n\nGood morning. Here's what's on your plate today, ${dateLabel}:\n\n`;
+  if (!todayItems.length) {
+    body += '• No tasks or appointments scheduled — open day, prospect hard.\n';
+  } else {
+    todayItems.forEach(t => {
+      const time = t.due_time ? `${formatTime12h(t.due_time)} — ` : '';
+      let contactBit = '';
+      if (t.contact_id) {
+        const c = crmContacts.find(x => x.id === t.contact_id);
+        if (c) {
+          const nm = [c.first_name, c.last_name].filter(Boolean).join(' ');
+          if (nm) contactBit = ` (${nm}${c.phone ? ' · ' + c.phone : ''})`;
+        }
+      }
+      body += `• ${time}${t.title}${contactBit}\n`;
+    });
+  }
+  body += `\n${todayItems.length} item${todayItems.length === 1 ? '' : 's'} on the schedule. Go get 'em.`;
+
+  try {
+    await crmClient.from('tasks').insert({
+      owner_id: crmUser.id,
+      title: `Morning briefing — ${dateLabel}`,
+      notes: body,
+      due_date: todayStr,
+      due_time: '09:00',
+      priority: 'high',
+      completed: false
+    });
+  } catch (e) {
+    console.warn('[MorningBriefing] failed:', e);
+  }
+}
+window.ensureMorningBriefing = ensureMorningBriefing;
+
+// Format "14:30" → "2:30 PM"
+function formatTime12h(t) {
+  if (!t) return '';
+  const [h, m] = String(t).split(':').map(Number);
+  if (isNaN(h)) return t;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = ((h % 12) || 12);
+  return `${h12}:${String(m || 0).padStart(2,'0')} ${ampm}`;
+}
+
+// =====================================================================
+// LEAD CADENCE — auto-creates a 5-touch follow-up sequence when a deal
+// enters a Leads-pipeline stage. Tasks are tagged in notes with
+// "[lead-cadence]" so they can be cancelled when the deal moves out.
+// Day +1 call · Day +3 email · Day +7 call · Day +14 email · Day +30 call
+// =====================================================================
+
+const LEAD_CADENCE_TAG = '[lead-cadence]'; // shared prefix — matches any stage cadence
+
+// Per-stage cadence map. Keys are lowercase stage names. To add a cadence for
+// a new stage (e.g. "Quoted"), just add an entry here. The stage-change
+// handler will pick it up automatically.
+const STAGE_CADENCES = {
+  'new lead': {
+    label: 'New Lead',
+    tag: '[lead-cadence:new-lead]',
+    touches: [
+      { offsetDays: 1,  title: 'Day 1 — morning call',        channel: 'call',  priority: 'high',   prompt: 'First follow-up — call early. Highest close-rate touch. Ask if they reviewed the quote.' },
+      { offsetDays: 2,  title: 'Day 2 — afternoon call',      channel: 'call',  priority: 'high',   prompt: 'Different time of day. If no answer Day 1, this catches them on lunch break or after work.' },
+      { offsetDays: 3,  title: 'Day 3 — email + voicemail',   channel: 'email', priority: 'high',   prompt: 'Send a recap email AND leave a voicemail. Multi-channel keeps you top of mind.' },
+      { offsetDays: 5,  title: 'Day 5 — check-in call',       channel: 'call',  priority: 'normal', prompt: 'They’ve had time to think. Push for a decision or a specific next-step time.' },
+      { offsetDays: 7,  title: 'Day 7 — email follow-up',     channel: 'email', priority: 'normal', prompt: 'One-week mark. Soft email — share a benefits highlight or carrier note relevant to their situation.' },
+      { offsetDays: 10, title: 'Day 10 — call',               channel: 'call',  priority: 'normal', prompt: 'Mid-cadence call. If still no contact, leave a value-add voicemail.' },
+      { offsetDays: 14, title: 'Day 14 — email',              channel: 'email', priority: 'normal', prompt: 'Two-week email. Mention any deadlines (OEP, SEP, plan year) that apply.' },
+      { offsetDays: 21, title: 'Day 21 — call',               channel: 'call',  priority: 'low',    prompt: 'Three-week call. Last aggressive attempt before the cadence cools.' },
+      { offsetDays: 30, title: 'Day 30 — final follow-up',    channel: 'call',  priority: 'low',    prompt: 'Final cadence call. If no answer, mark Lost or move to long-term nurture.' }
+    ]
+  },
+  'positive contact': {
+    label: 'Positive Contact',
+    tag: '[lead-cadence:positive-contact]',
+    touches: [
+      { offsetDays: 1,  title: 'Day +1 follow-up call',        channel: 'call',  priority: 'high',   prompt: 'Confirm interest, answer any leftover questions from first call. Push for next step.' },
+      { offsetDays: 3,  title: 'Day +3 email check-in',        channel: 'email', priority: 'normal', prompt: 'Low-pressure email. Recap quote, attach plan summary if available.' },
+      { offsetDays: 7,  title: 'Day +7 week check-in call',    channel: 'call',  priority: 'normal', prompt: 'Week mark. If still warm, push for enrollment. If hesitant, address objection.' },
+      { offsetDays: 14, title: 'Day +14 two-week email',       channel: 'email', priority: 'low',    prompt: 'Two-week nudge. Mention any plan year deadlines or SEP windows that apply.' },
+      { offsetDays: 30, title: 'Day +30 re-engagement call',   channel: 'call',  priority: 'low',    prompt: 'One-month re-engagement. Has anything changed? Open enrollment coming up?' }
+    ]
+  },
+  'quoted': {
+    label: 'Quoted',
+    tag: '[lead-cadence:quoted]',
+    touches: [
+      { offsetDays: 1,  title: 'Day +1 decision call',         channel: 'call',  priority: 'high',   prompt: 'Quote is fresh in their mind. Ask if they have questions about the plan. Try to close or schedule enrollment call.' },
+      { offsetDays: 3,  title: 'Day +3 quote recap email',     channel: 'email', priority: 'high',   prompt: 'Send written quote summary so they have it on paper. Include carrier, premium, deductible, plan year start date.' },
+      { offsetDays: 7,  title: 'Day +7 decision push call',    channel: 'call',  priority: 'normal', prompt: 'One week after quote. Push for a yes/no/objection. Address any cost concerns directly.' },
+      { offsetDays: 14, title: 'Day +14 re-engagement call',   channel: 'call',  priority: 'normal', prompt: 'Two weeks since quote. Check if anything changed (new job, SEP, dependents). Re-quote if needed.' },
+      { offsetDays: 21, title: 'Day +21 nurture email',        channel: 'email', priority: 'low',    prompt: 'Soft email — share a benefits explainer or carrier feature relevant to them. No hard sell.' },
+      { offsetDays: 30, title: 'Day +30 final follow-up',      channel: 'call',  priority: 'low',    prompt: 'Final cadence call. Mark Lost or move to long-term nurture if still no decision.' }
+    ]
+  },
+  'screen share': {
+    label: 'Screen Share',
+    tag: '[lead-cadence:screen-share]',
+    touches: [
+      { offsetDays: 1,  title: 'Day +1 post-screenshare call',  channel: 'call',  priority: 'high',   prompt: 'Right after the screenshare. Ask if they had time to think it over. Push for enrollment.' },
+      { offsetDays: 3,  title: 'Day +3 follow-up email',        channel: 'email', priority: 'high',   prompt: 'Recap what you walked through on screen. Re-share plan summary, deductibles, premiums.' },
+      { offsetDays: 7,  title: 'Day +7 decision push call',     channel: 'call',  priority: 'normal', prompt: 'One week after screenshare. They’ve seen the plans — push for yes/no/objection.' },
+      { offsetDays: 14, title: 'Day +14 re-engagement call',    channel: 'call',  priority: 'normal', prompt: 'Two weeks out. Check for life changes (new job, dependents, SEP). Re-quote if needed.' },
+      { offsetDays: 21, title: 'Day +21 nurture email',         channel: 'email', priority: 'low',    prompt: 'Soft email — share a benefits highlight or carrier note relevant to them.' },
+      { offsetDays: 30, title: 'Day +30 final follow-up',       channel: 'call',  priority: 'low',    prompt: 'Final cadence call. Mark Lost or move to long-term nurture if still no decision.' }
+    ]
+  },
+  'application': {
+    label: 'Application',
+    tag: '[lead-cadence:application]',
+    touches: [
+      { offsetDays: 2, title: 'Day +2 application status check', channel: 'call', priority: 'high', prompt: 'Confirm carrier received the app. Flag any missing documents. Set expectations on approval timing and ID card delivery.' }
+    ]
+  },
+  'sold': {
+    label: 'Sold',
+    tag: '[lead-cadence:sold]',
+    touches: [
+      { offsetDays: 1, title: 'Day +1 congrats call', channel: 'call', priority: 'high', prompt: 'Welcome them aboard. Confirm coverage start date, ID card timing, and how to reach you with questions. Ask for a referral while they’re hot.' }
+    ]
+  }
+};
+
+// Look up the cadence definition for a stage. Returns null if the stage has no cadence.
+function findStageCadence(stageId) {
+  if (!stageId) return null;
+  const s = crmStages.find(ss => ss.id === stageId);
+  if (!s) return null;
+  if (!isLeadsPipelineId(s.pipeline_id)) return null;
+  const key = (s.name || '').toLowerCase().trim();
+  return STAGE_CADENCES[key] || null;
+}
+
+// Returns true if the given pipeline name is a Leads pipeline (case insensitive)
+function isLeadsPipelineName(name) {
+  return /^leads$/i.test((name || '').trim());
+}
+function isLeadsPipelineId(pipelineId) {
+  const p = crmPipelines.find(pp => pp.id === pipelineId);
+  return p ? isLeadsPipelineName(p.name) : false;
+}
+// True only for the "New Lead" stage in the Leads pipeline. The cadence
+// auto-fires here only — other stages (Positive Contact, Quoted, etc.)
+// will have their own future cadences.
+function isNewLeadStage(stageId) {
+  if (!stageId) return false;
+  const s = crmStages.find(ss => ss.id === stageId);
+  if (!s) return false;
+  if (!isLeadsPipelineId(s.pipeline_id)) return false;
+  return /^new\s*lead$/i.test((s.name || '').trim());
+}
+
+// Build a YYYY-MM-DD date N days from today (local time, not UTC)
+function dateOffsetISO(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function createLeadCadenceTasks(dealId, contactId, contactName, stageId) {
+  if (!crmClient || !crmUser) return 0;
+  if (!dealId) return 0;
+
+  // Resolve which cadence to use based on the stage. Default to "new lead"
+  // when called without a stageId (preserves backward compat with old callers).
+  let cadence = stageId ? findStageCadence(stageId) : null;
+  if (!cadence) cadence = STAGE_CADENCES['new lead'];
+  if (!cadence) return 0;
+
+  // Skip if cadence tasks for THIS specific stage already exist (idempotent
+  // per-stage). Tasks for a previous stage are cancelled before this runs.
+  try {
+    const { data: existing } = await crmClient
+      .from('tasks')
+      .select('id, notes')
+      .eq('deal_id', dealId);
+    if (existing && existing.some(t => (t.notes || '').includes(cadence.tag))) {
+      return 0; // already seeded for this stage
+    }
+  } catch (_) {}
+
+  const label = contactName || 'lead';
+  let inserted = 0;
+  for (const t of cadence.touches) {
+    const row = {
+      title: `${t.title} · ${label}`,
+      notes: `${cadence.tag} day +${t.offsetDays} ${t.channel} · ${t.prompt}`,
+      due_date: dateOffsetISO(t.offsetDays),
+      priority: t.priority,
+      completed: false,
+      contact_id: contactId || null,
+      deal_id: dealId
+    };
+    const result = await insertAutoTask(row);
+    if (result) inserted++;
+  }
+  return inserted;
+}
+window.createLeadCadenceTasks = createLeadCadenceTasks;
+
+// Cancel any incomplete cadence tasks tied to a deal — used when a lead moves
+// out of the Leads pipeline (Sold, Lost, Opportunity, etc.)
+async function cancelLeadCadenceTasks(dealId) {
+  if (!crmClient || !dealId) return 0;
+  try {
+    const { data: tasks, error } = await crmClient
+      .from('tasks')
+      .select('id, notes, completed')
+      .eq('deal_id', dealId);
+    if (error) throw error;
+    const cadenceOpen = (tasks || []).filter(t => !t.completed && (t.notes || '').includes(LEAD_CADENCE_TAG));
+    if (!cadenceOpen.length) return 0;
+    const ids = cadenceOpen.map(t => t.id);
+    const { error: delErr } = await crmClient.from('tasks').delete().in('id', ids);
+    if (delErr) throw delErr;
+    return ids.length;
+  } catch (e) {
+    console.warn('[LeadCadence] cancel failed:', e);
+    return 0;
+  }
+}
+window.cancelLeadCadenceTasks = cancelLeadCadenceTasks;
 
 // Insert a single auto-task. Returns the inserted row or null on error.
 async function insertAutoTask(row) {
@@ -6355,8 +6628,91 @@ function renderCRMDashboard() {
         </div>
       </div>
       <div style="margin-top:14px">
+        ${renderStaleLeadsCard()}
+      </div>
+      <div style="margin-top:14px">
         ${renderDataQualityCard()}
       </div>
+    </div>`;
+}
+
+// Stale Leads card — leads in any Leads-pipeline stage with no completed task
+// in the last 14+ days. Click-through to the deal so you can re-engage.
+function renderStaleLeadsCard() {
+  const STALE_DAYS = 14;
+  const now = new Date();
+  // Build a quick lookup of last-completed-task per deal
+  const lastTouchByDeal = {};
+  (crmTasks || []).forEach(t => {
+    if (!t.deal_id || !t.completed) return;
+    const ts = t.completed_at || t.updated_at || t.due_date || t.created_at;
+    if (!ts) return;
+    const cur = lastTouchByDeal[t.deal_id];
+    if (!cur || new Date(ts) > new Date(cur)) lastTouchByDeal[t.deal_id] = ts;
+  });
+  // Leads pipelines + their stage IDs
+  const leadsPipelineIds = (crmPipelines || []).filter(p => isLeadsPipelineName(p.name)).map(p => p.id);
+  if (!leadsPipelineIds.length) {
+    return ''; // no Leads pipeline yet — nothing to render
+  }
+  const leadStageIds = new Set((crmStages || []).filter(s => leadsPipelineIds.includes(s.pipeline_id) && !s.is_won && !s.is_lost).map(s => s.id));
+  // Find stale deals
+  const stale = (crmDeals || [])
+    .filter(d => leadStageIds.has(d.stage_id))
+    .map(d => {
+      const refDate = lastTouchByDeal[d.id] || d.created_at || d.updated_at;
+      const ref = refDate ? new Date(refDate) : null;
+      const daysSince = ref ? Math.floor((now - ref) / (1000 * 60 * 60 * 24)) : 999;
+      return { deal: d, daysSince, refDate };
+    })
+    .filter(x => x.daysSince >= STALE_DAYS)
+    .sort((a, b) => b.daysSince - a.daysSince);
+
+  if (!stale.length) {
+    return `
+      <div class="card" style="margin-bottom:0;background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+        <div class="section-header">
+          <div class="section-header__title">Stale leads <span style="font-size:11px;color:var(--text-3);font-weight:400;margin-left:6px">no follow-up in ${STALE_DAYS}+ days</span></div>
+        </div>
+        <div style="margin-top:var(--space-2);font-size:13px;color:var(--text-3);padding:14px 0">All leads have been touched recently — nice work.</div>
+      </div>`;
+  }
+
+  const rows = stale.slice(0, 12).map(({ deal, daysSince }) => {
+    const contact = (crmContacts || []).find(c => c.id === deal.contact_id);
+    const name = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(' ') : (deal.name || 'Unknown');
+    const phone = contact && contact.phone ? contact.phone : '';
+    const stage = (crmStages || []).find(s => s.id === deal.stage_id);
+    const stageName = stage ? stage.name : '?';
+    const dayColor = daysSince >= 30 ? 'var(--status-negative)' : daysSince >= 21 ? '#f59e0b' : 'var(--text-2)';
+    return `
+      <tr style="border-bottom:0.5px solid var(--border-subtle);cursor:pointer;transition:background 0.1s" onclick="openDealDetail('${deal.id}')" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+        <td style="padding:10px;color:var(--text-1);font-weight:500">${escapeHTML(name)}</td>
+        <td style="padding:10px;color:var(--text-3);font-size:12px">${escapeHTML(phone)}</td>
+        <td style="padding:10px;color:var(--text-3);font-size:12px">${escapeHTML(stageName)}</td>
+        <td style="padding:10px;text-align:right;color:${dayColor};font-weight:600;font-variant-numeric:tabular-nums">${daysSince}d</td>
+      </tr>`;
+  }).join('');
+
+  const moreNote = stale.length > 12 ? `<div style="font-size:11.5px;color:var(--text-3);padding:8px 10px 0;text-align:center">+ ${stale.length - 12} more — open the Pipelines view to see all</div>` : '';
+
+  return `
+    <div class="card" style="margin-bottom:0;background:var(--bg-surface-1);border-color:var(--border-subtle);padding:var(--space-5)">
+      <div class="section-header">
+        <div class="section-header__title">Stale leads <span class="pill" style="background:rgba(239,68,68,0.12);color:#fca5a5;border-color:rgba(239,68,68,0.3)">${stale.length}</span><span style="font-size:11px;color:var(--text-3);font-weight:400;margin-left:6px">no follow-up in ${STALE_DAYS}+ days</span></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:var(--space-2)">
+        <thead>
+          <tr style="border-bottom:0.5px solid var(--border-subtle)">
+            <th style="text-align:left;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Lead</th>
+            <th style="text-align:left;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Phone</th>
+            <th style="text-align:left;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Stage</th>
+            <th style="text-align:right;padding:10px;color:var(--text-3);font-size:11px;letter-spacing:0.02em;font-weight:500">Days stale</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${moreNote}
     </div>`;
 }
 
@@ -6895,8 +7251,16 @@ async function submitCRMImport() {
       };
       // Only include created_at if explicitly set — Supabase auto-fills otherwise.
       if (createdAt) dealRow.created_at = createdAt;
-      const { error: dealErr } = await crmClient.from('deals').insert(dealRow);
+      const { data: insertedDeal, error: dealErr } = await crmClient.from('deals').insert(dealRow).select('id').single();
       if (dealErr) throw dealErr;
+
+      // Fire whichever stage cadence applies (New Lead, Positive Contact,
+      // Quoted, etc.). Stages without a cadence definition get nothing.
+      if (insertedDeal && findStageCadence(stageId)) {
+        try {
+          await createLeadCadenceTasks(insertedDeal.id, contactId, leadShape.name, stageId);
+        } catch (_) {}
+      }
       return { ok: true };
     } catch (e) {
       return { ok: false, row: r.rowNumber, message: (e && e.message) || 'Unknown error' };
@@ -7012,6 +7376,41 @@ async function crmDrop(ev, newStageId, newPipelineId) {
       if (error) throw error;
       // Activity log fires-and-forgets — never blocks the UI
       logActivity(dealId, 'system', desc, deal.contact_id).catch(() => {});
+
+      // Stage cadences — driven by the STAGE_CADENCES map. Each stage with a
+      // defined cadence gets its own task set when the deal lands there. Any
+      // remaining cadence tasks from the previous stage are cancelled first.
+      const prevCad = findStageCadence(prevStage);
+      const newCad  = findStageCadence(newStageId);
+      if (prevStage !== newStageId) {
+        // Always cancel any open cadence tasks tied to this deal before
+        // creating new ones — handles transitions between cadenced stages
+        // (e.g. New Lead → Positive Contact) cleanly.
+        if (prevCad) {
+          cancelLeadCadenceTasks(dealId).then(n => {
+            if (n > 0 && typeof showToast === 'function') {
+              showToast(`Cancelled ${n} ${prevCad.label} cadence task${n === 1 ? '' : 's'}.`, 'success');
+            }
+          });
+        }
+        if (newCad) {
+          const contact = crmContacts.find(c => c.id === deal.contact_id);
+          const label = (contact && (contact.first_name || contact.last_name))
+            ? [contact.first_name, contact.last_name].filter(Boolean).join(' ')
+            : (deal.name || 'lead');
+          // Small delay so the cancellation finishes first (avoids briefly
+          // having both stages' tasks visible at once)
+          setTimeout(() => {
+            createLeadCadenceTasks(dealId, deal.contact_id, label, newStageId)
+              .then(n => {
+                if (n > 0 && typeof showToast === 'function') {
+                  showToast(`Started ${newCad.label} cadence (${n} tasks).`, 'success');
+                }
+              })
+              .catch(() => {});
+          }, 600);
+        }
+      }
     } catch (e) {
       // Roll back on failure
       deal.stage_id = prevStage;
@@ -10346,7 +10745,7 @@ function requotePolicyInTool(policyId) {
   } catch (err) { console.warn('[Re-quote] prefill error', err); }
   // Scroll to the form so it's obvious the fields got populated.
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  showToast('Pre-filled with ' + (contact.first_name || 'client') + '. Click Get ACA Plans when ready.', 'success');
+  showToast('Pre-filled with ' + (contact.first_name || 'client') + '. Click Get Quote when ready.', 'success');
 }
 
 // Open Gmail compose with the renewal-reminder template prefilled for this
