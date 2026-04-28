@@ -1535,7 +1535,7 @@
 
   <div class="header">
     <div class="logo-mark"><span class="logo-plus">+</span> Covered by Greco</div>
-    <div class="header-sub">ACA Quote Builder · 2026</div>
+    <div class="header-sub">Quote Builder · 2026</div>
   </div>
 
   <!-- STEP 1: Input -->
@@ -1619,7 +1619,7 @@
     </div>
 
     <button class="btn-primary" id="fetchBtn" onclick="fetchQuote()">
-      Get ACA Plans
+      Get Quote
     </button>
     <div id="errorMsg" class="error-msg" style="display:none"></div>
   </div>
@@ -2886,7 +2886,7 @@ function showError(msg) {
   btn.disabled = false;
   const banner = document.getElementById('editingBanner');
   const isEditing = banner && banner.style.display !== 'none';
-  btn.innerHTML = isEditing ? '🔄 Update Quote' : 'Get ACA Plans';
+  btn.innerHTML = isEditing ? '🔄 Update Quote' : 'Get Quote';
 }
 
 // State-based exchanges — these states run their own marketplaces and are
@@ -2939,75 +2939,95 @@ async function fetchQuote() {
   btn.innerHTML = '<span class="spinner"></span> Looking up county...';
 
   try {
-    // 1. Get county from ZIP
-    const countyRes = await fetch(`${BASE}/counties/by/zip/${zip}?apikey=${API_KEY}&year=${YEAR}`);
-    if (!countyRes.ok) throw new Error(`County lookup failed (${countyRes.status}). Check your API key.`);
-    const countyData = await countyRes.json();
-    if (!countyData.counties || countyData.counties.length === 0) {
-      throw new Error('No county found for ZIP ' + zip + '. Please verify the ZIP code.');
-    }
-    const county = countyData.counties[0];
-
-    // Short-circuit for state-based exchanges — the federal Marketplace API
-    // doesn't carry plans for these states, and submitting returns the
-    // "state is not a valid marketplace state" error.
-    const sbe = STATE_BASED_EXCHANGES[(county.state || '').toUpperCase()];
-    if (sbe) {
-      const stateName = county.state || '';
-      throw new Error(
-        `${stateName} runs its own marketplace — plans aren't available through the federal exchange (this tool's data source). ` +
-        `Get a quote for this client at <a href="${sbe.url}" target="_blank" rel="noopener" style="color:var(--yellow);text-decoration:underline">${sbe.name}</a>.`
-      );
+    // 1. Get county from ZIP — failure is non-fatal; we'll quote private only.
+    let county = null;
+    let noACA = false;
+    let noACAReason = '';
+    try {
+      const countyRes = await fetch(`${BASE}/counties/by/zip/${zip}?apikey=${API_KEY}&year=${YEAR}`);
+      if (!countyRes.ok) throw new Error(`County lookup ${countyRes.status}`);
+      const countyData = await countyRes.json();
+      if (countyData.counties && countyData.counties.length > 0) {
+        county = countyData.counties[0];
+      } else {
+        noACA = true;
+        noACAReason = 'No county found for ZIP ' + zip;
+      }
+    } catch (countyErr) {
+      noACA = true;
+      noACAReason = 'County lookup failed';
     }
 
-    btn.innerHTML = '<span class="spinner"></span> Fetching ACA plan prices...';
-
-    // 2. Search plans — map our roster to the API's expected format
-    const hasSpouseInRoster = roster.some(p => p.role === 'Spouse');
-    const people = roster.map(p => ({
-      age: parseInt(p.age),
-      aptc_eligible: checkSubsidy,
-      gender: p.gender,
-      uses_tobacco: false,
-      is_pregnant: false,
-      is_parent: p.role === 'Self' && roster.some(r => r.role === 'Dependent'),
-      relationship: p.role === 'Dependent' ? 'Child' : p.role
-    }));
-
-    const body = {
-      household: {
-        income: checkSubsidy ? income : 50000,
-        people,
-        has_married_couple: hasSpouseInRoster
-      },
-      market: 'Individual',
-      place: {
-        countyfips: county.fips,
-        state: county.state,
-        zipcode: zip
-      },
-      year: YEAR
-    };
-
-    const plansRes = await fetch(`${BASE}/plans/search?apikey=${API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!plansRes.ok) {
-      let detail = '';
-      try { const e = await plansRes.json(); detail = JSON.stringify(e); } catch {}
-      throw new Error(`Plan search failed (${plansRes.status}). ${detail}`);
+    // State-based exchange short-circuit — those states aren't on the federal
+    // exchange, but we still let the agent quote private.
+    let sbeNote = null;
+    if (county) {
+      const sbe = STATE_BASED_EXCHANGES[(county.state || '').toUpperCase()];
+      if (sbe) {
+        noACA = true;
+        sbeNote = sbe;
+        noACAReason = `${county.state} uses ${sbe.name}`;
+      }
     }
-    const plansData = await plansRes.json();
 
-    // If no ACA plans available, fall back to a private-only quote so the
-    // agent can still pitch a private/PPO plan instead of dead-ending.
+    // 2. ACA plan search — only if we have a county AND it's not state-based.
+    let plansData = { plans: [] };
+    if (!noACA && county) {
+      btn.innerHTML = '<span class="spinner"></span> Fetching plan prices...';
+      try {
+        const hasSpouseInRoster = roster.some(p => p.role === 'Spouse');
+        const people = roster.map(p => ({
+          age: parseInt(p.age),
+          aptc_eligible: checkSubsidy,
+          gender: p.gender,
+          uses_tobacco: false,
+          is_pregnant: false,
+          is_parent: p.role === 'Self' && roster.some(r => r.role === 'Dependent'),
+          relationship: p.role === 'Dependent' ? 'Child' : p.role
+        }));
+        const body = {
+          household: {
+            income: checkSubsidy ? income : 50000,
+            people,
+            has_married_couple: hasSpouseInRoster
+          },
+          market: 'Individual',
+          place: {
+            countyfips: county.fips,
+            state: county.state,
+            zipcode: zip
+          },
+          year: YEAR
+        };
+        const plansRes = await fetch(`${BASE}/plans/search?apikey=${API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (plansRes.ok) {
+          plansData = await plansRes.json();
+        } else {
+          noACA = true;
+          noACAReason = `Plan search returned ${plansRes.status}`;
+        }
+      } catch (planErr) {
+        noACA = true;
+        noACAReason = 'Plan search failed';
+      }
+    }
+
+    // Compute ranges from whatever we got back. If nothing, noACA is true and
+    // showResults will render the private-only path.
     const havePlans = plansData.plans && plansData.plans.length > 0;
     const premiums = havePlans ? plansData.plans.map(p => p.premium).filter(v => v && v > 0) : [];
     const acaMin = premiums.length ? Math.round(Math.min(...premiums)) : 0;
     const acaMax = premiums.length ? Math.round(Math.max(...premiums)) : 0;
-    const noACA = !havePlans || premiums.length === 0;
+    if (!premiums.length) noACA = true;
+
+    // Build a placeholder county so showResults always has location info to display
+    if (!county) {
+      county = { name: 'Unknown', state: '?', fips: null };
+    }
 
     // If we checked subsidy, extract post-subsidy premiums
     let subMin = null, subMax = null;
@@ -3357,7 +3377,7 @@ I would be happy to discuss the different plans with you and help you find the o
   if (banner) banner.style.display = 'none';
 
   document.getElementById('fetchBtn').disabled = false;
-  document.getElementById('fetchBtn').innerHTML = 'Get ACA Plans';
+  document.getElementById('fetchBtn').innerHTML = 'Get Quote';
 
   // Scroll to top of results
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3477,7 +3497,7 @@ function editQuote() {
 function cancelEdit() {
   const banner = document.getElementById('editingBanner');
   if (banner) banner.style.display = 'none';
-  document.getElementById('fetchBtn').innerHTML = 'Get ACA Plans';
+  document.getElementById('fetchBtn').innerHTML = 'Get Quote';
   // If we have cached results, flip back to them
   if (currentPlans && currentPlans.length > 0) {
     document.getElementById('step1').style.display = 'none';
@@ -4320,7 +4340,7 @@ function goBack() {
   // Hide editing banner and reset button text
   const banner = document.getElementById('editingBanner');
   if (banner) banner.style.display = 'none';
-  document.getElementById('fetchBtn').innerHTML = 'Get ACA Plans';
+  document.getElementById('fetchBtn').innerHTML = 'Get Quote';
 
   // Clear cached plans
   currentPlans = [];
