@@ -3843,6 +3843,46 @@ function renderSavedLeadsList() {
   }).join('');
 }
 
+// Backfill Census property data for saved leads that don't have it yet.
+// Runs once per session (silent), serially with 250ms gaps to be polite to
+// the Census API. Re-renders the saved leads list when done.
+let __cbgBackfillRan = false;
+async function backfillCensusOnSavedLeads() {
+  if (__cbgBackfillRan) return;
+  __cbgBackfillRan = true;
+  if (typeof fetchCensusZipMedianValue !== 'function') return;
+  let leads = (typeof loadSavedLeads === 'function') ? loadSavedLeads() : [];
+  const needs = leads.filter(l =>
+    !l.propertyValue && !l.propertyDataSource && l.zip && /^\d{5}$/.test(String(l.zip))
+  );
+  if (!needs.length) return;
+  let updated = 0;
+  for (const l of needs) {
+    try {
+      const data = await fetchCensusZipMedianValue(String(l.zip));
+      if (data && data.price) {
+        leads = leads.map(x => x.id === l.id
+          ? { ...x, propertyValue: data.price, propertyType: data.propertyType || null, propertyDataSource: data.source || 'census-zip' }
+          : x
+        );
+        updated++;
+        // Save incrementally so progress is persisted even if the user closes the tab
+        if (updated % 5 === 0) saveSavedLeads(leads);
+      }
+    } catch (_) { /* ignore individual failures */ }
+    // Light throttle so we don't hammer the Census API
+    await new Promise(r => setTimeout(r, 250));
+  }
+  if (updated > 0) {
+    saveSavedLeads(leads);
+    if (typeof renderSavedLeadsList === 'function') renderSavedLeadsList();
+    if (typeof showToast === 'function') showToast(`Filled in property data for ${updated} existing lead${updated === 1 ? '' : 's'}.`, 'success');
+  }
+}
+// Run a few seconds after page load so it doesn't compete with the initial render
+setTimeout(() => backfillCensusOnSavedLeads(), 4000);
+window.backfillCensusOnSavedLeads = backfillCensusOnSavedLeads;
+
 // Push a saved lead to Ringy via the Edge Function proxy. Mirrors the
 // "Send to Ringy" path from the Lead Review modal but works on a lead that's
 // already in localStorage.
