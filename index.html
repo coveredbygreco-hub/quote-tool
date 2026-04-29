@@ -3658,6 +3658,16 @@ function openSaveLeadModal() {
   document.getElementById('saveLeadDOB').value = selfDOB;
   document.getElementById('saveLeadError').style.display = 'none';
   document.getElementById('saveLeadModal').style.display = 'flex';
+
+  // Pull through any extension-scraped contact info that's stashed in memory.
+  // Fields the quote engine doesn't otherwise capture (phone, email, address,
+  // street/city/state/zip, lead source) come straight from the VanillaSoft
+  // scrape so the agent doesn't have to re-type them.
+  const stashed = window.__cbgPendingLeadPrefill;
+  if (stashed && typeof applyCBGSaveLeadPrefill === 'function') {
+    try { applyCBGSaveLeadPrefill(stashed); } catch (_) {}
+  }
+
   setTimeout(() => {
     document.getElementById('saveLeadPhone').focus();
   }, 50);
@@ -12828,13 +12838,30 @@ function applyCBGSaveLeadPrefill(lead) {
   };
   const firstName = lead.firstName || (lead.fullName || '').split(' ')[0] || '';
   const lastName  = lead.lastName  || (lead.fullName || '').split(' ').slice(1).join(' ') || '';
+  const fullName  = [firstName, lastName].filter(Boolean).join(' ').trim() || lead.fullName || lead.name || '';
+  // Older "split" form (if present) and the current "full name" form (saveLeadName)
   setIfEmpty('saveLeadFirstName', firstName);
   setIfEmpty('saveLeadLastName',  lastName);
+  setIfEmpty('saveLeadName',      fullName);
   setIfEmpty('saveLeadEmail',     lead.email);
-  setIfEmpty('saveLeadPhone',     lead.phone);
-  setIfEmpty('saveLeadDOB',       lead.dob);
+  // Phone: strip to digits so the modal's tel-input doesn't choke on "(702) 555-1234"
+  const phoneDigits = lead.phone ? String(lead.phone).replace(/\D/g, '') : '';
+  setIfEmpty('saveLeadPhone',     phoneDigits || lead.phone);
+  // DOB: the modal uses <input type="date"> which needs YYYY-MM-DD.
+  // Scrape data is MM/DD/YYYY — convert.
+  if (lead.dob) {
+    const m = String(lead.dob).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (m) {
+      const iso = `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+      setIfEmpty('saveLeadDOB', iso);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(lead.dob)) {
+      setIfEmpty('saveLeadDOB', lead.dob);
+    }
+  }
   setIfEmpty('saveLeadIncome',    lead.income);
-  setIfEmpty('saveLeadAddress',   lead.address);
+  // Address: combine street/city/state/zip into a single line if no separate fields exist
+  const fullAddress = [lead.address, lead.city, lead.state, lead.zip].filter(Boolean).join(', ');
+  setIfEmpty('saveLeadAddress',   fullAddress || lead.address);
   // Lead source — match against existing options if possible
   if (lead.leadSource) {
     const sel = document.getElementById('saveLeadSource');
