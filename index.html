@@ -1793,6 +1793,10 @@
     </div>
     <div class="saved-leads-head-row">
       <span id="crmStatusPill" class="crm-status-pill disconnected">CRM: Not Connected</span>
+      <button class="settings-gear" id="clearSyncedLeadsBtn" onclick="clearSyncedSavedLeads()" title="Remove leads already pushed to CRM or Ringy from this local list" style="display:none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        <span id="clearSyncedLeadsLabel">Clear synced</span>
+      </button>
       <div style="flex:1"></div>
       <button class="settings-gear" onclick="openCRMSettings()">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -3789,6 +3793,19 @@ function renderSavedLeadsList() {
   totalEl.textContent = leads.length;
   pluralEl.textContent = leads.length === 1 ? '' : 's';
 
+  // Show/hide the "Clear synced" button based on how many leads are already in CRM/Ringy
+  const syncedCount = leads.filter(l => l.crmSyncedAt || l.ringySentAt).length;
+  const clearBtn = document.getElementById('clearSyncedLeadsBtn');
+  const clearLbl = document.getElementById('clearSyncedLeadsLabel');
+  if (clearBtn && clearLbl) {
+    if (syncedCount > 0) {
+      clearBtn.style.display = '';
+      clearLbl.textContent = `Clear synced · ${syncedCount}`;
+    } else {
+      clearBtn.style.display = 'none';
+    }
+  }
+
   // Update CRM status pill in header
   initCRMClient();
   const pill = document.getElementById('crmStatusPill');
@@ -4037,6 +4054,30 @@ function deleteSavedLead(id) {
   updateSavedLeadsCount();
   renderSavedLeadsList();
 }
+
+// Bulk-clear leads that have already been pushed to CRM and/or Ringy. Keeps
+// localStorage lean so the Census ZIP cache and Lead Tier lookup stay fast.
+function clearSyncedSavedLeads() {
+  const leads = loadSavedLeads();
+  const synced = leads.filter(l => l.crmSyncedAt || l.ringySentAt);
+  if (!synced.length) {
+    if (typeof showToast === 'function') showToast('No synced leads to clear.', 'success');
+    return;
+  }
+  const inCRM = synced.filter(l => l.crmSyncedAt).length;
+  const inRingy = synced.filter(l => l.ringySentAt).length;
+  const summary = [];
+  if (inCRM) summary.push(`${inCRM} in CRM`);
+  if (inRingy) summary.push(`${inRingy} in Ringy`);
+  const msg = `Remove ${synced.length} synced lead${synced.length === 1 ? '' : 's'} from this device?\n(${summary.join(', ')})\n\nThe leads stay in your CRM/Ringy — only the local copies are removed.`;
+  if (!confirm(msg)) return;
+  const remaining = leads.filter(l => !(l.crmSyncedAt || l.ringySentAt));
+  saveSavedLeads(remaining);
+  updateSavedLeadsCount();
+  renderSavedLeadsList();
+  if (typeof showToast === 'function') showToast(`Cleared ${synced.length} synced lead${synced.length === 1 ? '' : 's'} from local storage.`, 'success');
+}
+window.clearSyncedSavedLeads = clearSyncedSavedLeads;
 
 // ===== CRM integration (Supabase) =====
 // Build a contact + deal payload from a saved lead, then push to Supabase.
